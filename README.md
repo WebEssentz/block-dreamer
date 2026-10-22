@@ -2,7 +2,7 @@
 
 > A 711 KB neural network that dreams ahead to beat you at blocks.
 
-Live demo → **[WebEssentz.github.io/block-dreamer](https://webessentz.github.io/block-dreamer/)** · Play solo or go head-to-head against the AI in your browser. No install. No server. No accounts.
+Live demo → **[blockpuzzle.onyerikam.com](https://blockpuzzle.onyerikam.com/)** · Play solo or go head-to-head against the AI in your browser. No install. No server. No accounts.
 
 ---
 
@@ -90,8 +90,7 @@ block-dreamer/
 ├── engine.js        # Board engine
 ├── ai-worker.js     # AI runs in a background thread
 ├── model.onnx       # Exported model (ONNX)
-├── model.json       # Model config
-└── README.md        # Project overview
+└── model.json       # Model config
 ```
 
 The trained weights are not published. The architecture and training code are described above — you can train your own.
@@ -100,7 +99,13 @@ The trained weights are not published. The architecture and training code are de
 
 ## Run it locally
 
-Just open `index.html` in a browser. No build step, no server, no dependencies.
+```sh
+git clone https://github.com/onyerikam/block-dreamer
+cd block-dreamer
+python -m http.server 8000
+```
+
+Then open `http://localhost:8000` in your browser. No build step, no dependencies.
 
 ---
 
