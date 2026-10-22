@@ -1,0 +1,14 @@
+# ignore everything
+*
+
+# except these
+!.gitignore
+!README.md
+!index.html
+!style.css
+!engine.js
+!ai-worker.js
+!app.js
+!model.onnx
+!model.json
+!me.jpg

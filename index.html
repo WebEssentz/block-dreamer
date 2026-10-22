@@ -1,0 +1,347 @@
+<!doctype html>
+<html lang="en">
+
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+  <title>Block Puzzle — you vs. the machine</title>
+  <meta name="description"
+    content="Same start. Different pieces. One winner. Play a block puzzle against a neural network that runs in your browser.">
+  <meta name="theme-color" content="#121211">
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='16' fill='%23121211'/%3E%3Crect x='32' y='10' width='22' height='22' rx='7' fill='%23f5f5f0' fill-opacity='.25'/%3E%3Crect x='10' y='32' width='22' height='22' rx='7' fill='%23f5f5f0' fill-opacity='.25'/%3E%3Crect x='10' y='10' width='22' height='22' rx='7' fill='%23f5f5f0'/%3E%3Crect x='32' y='32' width='22' height='22' rx='7' fill='%23f5f5f0'/%3E%3C/svg%3E">
+  <script>
+    try {
+      var t = localStorage.getItem('theme') ||
+        (matchMedia('(prefers-color-scheme: light)').matches ? 'light' : 'dark');
+      document.documentElement.setAttribute('data-theme', t);
+    } catch (e) { document.documentElement.setAttribute('data-theme', 'dark'); }
+  </script>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="style.css">
+</head>
+
+<body>
+
+  <div id="loader" aria-hidden="true">
+    <div class="ld-blocks"><i></i><i></i><i></i><i></i></div>
+  </div>
+
+  <header class="nav glass" id="nav">
+    <a class="brand" href="#top" aria-label="Block Puzzle">
+      <svg class="logo-mark" viewBox="0 0 64 64" width="30" height="30" fill="none" aria-hidden="true">
+        <rect x="32" y="6" width="26" height="26" rx="8" fill="var(--fg)" fill-opacity=".14" stroke="var(--fg)" stroke-opacity=".38" stroke-width="1.5"/>
+        <rect x="6" y="32" width="26" height="26" rx="8" fill="var(--fg)" fill-opacity=".14" stroke="var(--fg)" stroke-opacity=".38" stroke-width="1.5"/>
+        <rect x="6" y="6" width="26" height="26" rx="8" fill="var(--fg)"/>
+        <rect x="32" y="32" width="26" height="26" rx="8" fill="var(--fg)"/>
+        <rect x="10" y="9" width="18" height="4" rx="2" fill="#fff" fill-opacity=".30"/>
+        <rect x="36" y="35" width="18" height="4" rx="2" fill="#fff" fill-opacity=".30"/>
+      </svg><b>Block Puzzle</b>
+    </a>
+    <nav>
+      <a href="#how">How it works</a>
+      <a href="#about">Maker</a>
+    </nav>
+    <a class="nav-cta" href="#play">Play</a>
+  </header>
+
+  <main id="landing">
+    <!-- HERO -->
+    <section class="hero" id="top">
+      <div class="hero-pin" id="heroPin">
+        <canvas id="gl"></canvas>
+        <canvas id="scene"></canvas>
+        <h1 class="sr">Same board. One winner.</h1>
+
+        <div class="hero-top">
+          <a class="pill glass" href="#play" id="heroPill">
+            <span class="tag">New</span>
+            <span id="pillText">Play against an AI that dreams ahead</span>
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4"
+              stroke-linecap="round" stroke-linejoin="round">
+              <path d="M9 6l6 6-6 6" />
+            </svg>
+          </a>
+        </div>
+
+        <div class="hero-bottom">
+          <p class="sub">Same start. Different pieces. You and a neural network, side by side. Whoever plays better
+            wins.</p>
+          <div class="cta-row">
+            <a class="btn primary mag" href="#play" id="heroCta"><span>Play now</span></a>
+            <a class="btn glass mag" href="#how"><span>How it works</span></a>
+          </div>
+        </div>
+        <div class="scroll-cue" aria-hidden="true"><i></i></div>
+      </div>
+    </section>
+
+    <!-- MARQUEE -->
+    <section class="marquee" aria-hidden="true">
+      <div class="track">
+        <span>Same seed</span><span>Own pieces</span><span>No luck</span><span>Runs in your browser</span><span>Zero
+          servers</span><span>One winner</span>
+        <span>Same seed</span><span>Own pieces</span><span>No luck</span><span>Runs in your browser</span><span>Zero
+          servers</span><span>One winner</span>
+      </div>
+    </section>
+
+    <!-- MANIFESTO -->
+    <section class="manifesto" id="manifesto">
+      <p id="manifestoText">Every match starts identical. Same board. Same first hand. Then the pieces split, so there
+        is nothing to copy. Just two players, one human and one neural network, and a score that settles it.</p>
+    </section>
+
+    <!-- BENTO -->
+    <section class="bento" id="how">
+      <div class="section-head rv">
+        <span class="eyebrow">How it works</span>
+        <h2>Fair by design.</h2>
+      </div>
+      <div class="grid">
+        <article class="card c3 rv">
+          <div class="mini-pair">
+            <div class="mini-wrap">
+              <div class="mini" data-seed="11"></div><small>You</small>
+            </div>
+            <div class="mini-wrap">
+              <div class="mini" data-seed="11"></div><small>AI</small>
+            </div>
+          </div>
+          <h3>Same start. Own pieces.</h3>
+          <p>One seed builds the board and the first hand. After that, you and the AI draw different pieces, so nobody
+            can copy a move.</p>
+        </article>
+        <article class="card c3 rv" data-d="80">
+          <div class="stat"><span data-count="711">0</span><em>KB</em></div>
+          <h3>A whole brain in your browser.</h3>
+          <p>The model runs locally in a background thread, so the board never stutters while it thinks.</p>
+        </article>
+        <article class="card c2 rv" data-d="0">
+          <div class="stat"><span data-count="0">0</span><em>servers</em></div>
+          <h3>Nothing to host.</h3>
+          <p>Static files. Open it anywhere.</p>
+        </article>
+        <article class="card c2 rv" data-d="80">
+          <div class="stat"><span data-count="3">0</span><em>moves ahead</em></div>
+          <h3>It dreams before it plays.</h3>
+          <p>The AI imagines whole hands before it commits to a move.</p>
+        </article>
+        <article class="card c2 rv" data-d="160">
+          <div class="stat"><span>#</span><em>link</em></div>
+          <h3>Challenge your friends.</h3>
+          <p>Every board has a link. Send it, and they play your exact game.</p>
+        </article>
+      </div>
+    </section>
+
+    <!-- ABOUT -->
+    <section class="about" id="about">
+      <div class="portrait-wrap rv">
+        <div class="portrait glass" id="portrait">
+          <img src="me.jpg" alt="Portrait of the maker" onerror="this.remove()">
+          <div class="ph">
+            <svg width="46" height="46" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.4"
+              stroke-linecap="round" stroke-linejoin="round">
+              <circle cx="12" cy="8" r="4" />
+              <path d="M4 21c0-4.4 3.6-8 8-8s8 3.6 8 8" />
+            </svg>
+            <span>Your photo here</span>
+            <small>save it as me.jpg</small>
+          </div>
+        </div>
+        <div class="float-chip glass">Built, trained &amp; shipped solo</div>
+      </div>
+      <div class="about-text rv" data-d="100">
+        <span class="eyebrow">The maker</span>
+        <h2>Hi, I'm <span class="dim">Onyerikam</span>.</h2>
+        <p>I build things I wish existed. This puzzle started as a Python experiment. Then I taught a neural network to
+          play it, squeezed it down to 711 KB, and put it right here in your browser.</p>
+        <p>No servers, no accounts, no tracking. Just a game, a machine, and a score.</p>
+        <div class="chips">
+          <span class="glass">Python</span><span class="glass">PyTorch</span><span class="glass">ONNX</span><span
+            class="glass">WebAssembly</span>
+        </div>
+        <div class="links">
+          <a href="https://x.com/avurnaai" class="btn glass" target="_blank" rel="noopener noreferrer"><span>Twitter / X</span></a>
+          <a href="https://github.com/WebEssentz" class="btn glass" target="_blank" rel="noopener noreferrer"><span>GitHub</span></a>
+        </div>
+      </div>
+    </section>
+
+    <!-- MODES -->
+    <section class="modes" id="play">
+      <div class="section-head rv">
+        <span class="eyebrow">Ready?</span>
+        <h2>Choose your fight.</h2>
+        <div class="challenge glass" id="challenge" hidden>
+          <b>Challenge received.</b> <span id="challengeText"></span>
+        </div>
+      </div>
+      <div class="mode-grid">
+        <button class="mode rv" data-mode="solo">
+          <div class="m-ico">
+            <svg viewBox="0 0 48 48" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"
+              stroke-linejoin="round">
+              <rect x="8" y="8" width="14" height="14" rx="4" />
+              <rect x="26" y="8" width="14" height="14" rx="4" opacity=".4" />
+              <rect x="8" y="26" width="14" height="14" rx="4" opacity=".4" />
+              <rect x="26" y="26" width="14" height="14" rx="4" />
+            </svg>
+          </div>
+          <h3>Solo</h3>
+          <p>Just you and the board. Chase your best score.</p>
+          <span class="go">Play <i>→</i></span>
+        </button>
+        <button class="mode vs rv" data-mode="vs" data-d="100">
+          <span class="badge">AI</span>
+          <div class="m-ico">
+            <svg viewBox="0 0 48 48" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"
+              stroke-linejoin="round">
+              <rect x="5" y="10" width="16" height="28" rx="5" />
+              <rect x="27" y="10" width="16" height="28" rx="5" />
+              <path d="M24 20v8" opacity=".6" />
+            </svg>
+          </div>
+          <h3>You vs. AI</h3>
+          <p>Split screen. Same start, different pieces. Highest score wins.</p>
+          <span class="go">Play <i>→</i></span>
+        </button>
+      </div>
+    </section>
+
+    <section class="record" id="record" hidden>
+      <div class="section-head rv">
+        <span class="eyebrow">Your record</span>
+        <h2>Beat yourself.</h2>
+      </div>
+      <div class="rec-grid rv">
+        <div class="rec big"><b id="recBest">0</b><small>Best score</small></div>
+        <div class="rec"><b id="recGames">0</b><small>Games</small></div>
+        <div class="rec"><b id="recWins">–</b><small>Win rate vs AI</small></div>
+        <div class="rec"><b id="recStreak">0</b><small>Best streak</small></div>
+      </div>
+      <div class="rec-recent rv"><small>Last matches</small><div id="recRecent"></div></div>
+    </section>
+
+    <footer class="foot">
+      <div class="wm" id="wm" aria-label="Onyerikam">
+        <span class="back" aria-hidden="true">Onyerikam</span>
+        <span class="front" aria-hidden="true">Onyerikam</span>
+      </div>
+
+      <div class="foot-row">
+        <span>Built by Onyerikam · 2026</span>
+
+        <div class="theme-switch glass" role="group" aria-label="Theme">
+          <button type="button" data-set-theme="light" aria-label="Light mode">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">
+              <circle cx="12" cy="12" r="4"/>
+              <path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"/>
+            </svg>
+          </button>
+          <button type="button" data-set-theme="dark" aria-label="Dark mode">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M21 12.8A9 9 0 1111.2 3a7 7 0 009.8 9.8z"/>
+            </svg>
+          </button>
+        </div>
+
+        <a href="#top">Back to top ↑</a>
+      </div>
+    </footer>
+  </main>
+
+  <!-- GAME -->
+  <div id="game" hidden>
+    <div class="g-top">
+      <button class="icon glass" id="btnBack" aria-label="Back to menu">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4"
+          stroke-linecap="round" stroke-linejoin="round">
+          <path d="M15 6l-6 6 6 6" />
+        </svg>
+      </button>
+      <div class="g-title glass"><b id="modeChip">Solo</b><i></i><span id="seedChip">#000000</span></div>
+      <button class="icon glass" id="btnSound" aria-label="Toggle sound">
+        <svg id="icoOn" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+          stroke-linecap="round" stroke-linejoin="round">
+          <path d="M11 5L6 9H3v6h3l5 4V5z" />
+          <path d="M15.5 8.5a5 5 0 010 7M18.5 5.5a9 9 0 010 13" />
+        </svg>
+        <svg id="icoOff" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+          stroke-linecap="round" stroke-linejoin="round" style="display:none">
+          <path d="M11 5L6 9H3v6h3l5 4V5z" />
+          <path d="M22 9l-6 6M16 9l6 6" />
+        </svg>
+      </button>
+    </div>
+
+    <div class="arena" id="arena"></div>
+    <div class="countdown" id="countdown" aria-live="assertive"></div>
+    <div class="g-note" id="gNote"></div>
+
+    <div class="result" id="result" hidden>
+      <div class="r-card glass">
+        <span class="eyebrow" id="rKicker">Final</span>
+        <h2 id="rTitle">You win</h2>
+        <div class="r-scores" id="rScores"></div>
+        <p id="rSub"></p>
+        <div class="r-stats" id="rStats"></div>
+        <div class="r-btns">
+          <button class="btn primary" id="rRematch"><span>Rematch</span></button>
+          <button class="btn glass" id="rNew"><span>New board</span></button>
+          <button class="btn glass" id="rShare"><span>Share challenge</span></button>
+          <button class="btn ghost" id="rMenu"><span>Menu</span></button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div id="iris" aria-hidden="true">
+    <div class="iris-mark"><i></i><i></i><i></i><i></i></div>
+  </div>
+  <div id="toast" role="status"></div>
+
+  <script>
+    (function () {
+      var root = document.documentElement;
+      var meta = document.querySelector('meta[name="theme-color"]');
+      var btns = document.querySelectorAll('[data-set-theme]');
+
+      function apply(t, save) {
+        root.setAttribute('data-theme', t);
+        if (meta) meta.content = t === 'light' ? '#f5f5f0' : '#121211';
+        btns.forEach(function (b) {
+          b.classList.toggle('on', b.dataset.setTheme === t);
+        });
+        if (save) { try { localStorage.setItem('theme', t); } catch (e) {} }
+        window.dispatchEvent(new CustomEvent('themechange', { detail: t }));
+      }
+
+      btns.forEach(function (b) {
+        b.addEventListener('click', function () { apply(b.dataset.setTheme, true); });
+      });
+      apply(root.getAttribute('data-theme') || 'dark', false);
+
+      var wm = document.getElementById('wm');
+      if (wm) {
+        wm.addEventListener('pointermove', function (e) {
+          var r = wm.getBoundingClientRect();
+          var x = (e.clientX - r.left) / r.width - 0.5;
+          var y = (e.clientY - r.top) / r.height - 0.5;
+          wm.style.setProperty('--ry', (x * 14) + 'deg');
+          wm.style.setProperty('--rx', (-y * 14) + 'deg');
+        });
+        wm.addEventListener('pointerleave', function () {
+          wm.style.setProperty('--ry', '0deg');
+          wm.style.setProperty('--rx', '0deg');
+        });
+      }
+    })();
+  </script>
+  <script src="engine.js"></script>
+  <script src="app.js"></script>
+</body>
+
+</html>
