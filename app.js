@@ -478,7 +478,7 @@ function newGames(seed) {
   M.you.setGame(new Game(seed)); if (M.ai) M.ai.setGame(new Game(seed, { altSeed: aiSeedOf(seed) }));
   M.you.locked = true;
   M.ctl = { phase: 'think', pending: false, hold: 0, wait: 0, res: null, mv: null };
-  $('#seedChip').textContent = '#' + pad6(seed);
+  $('#seedChip').textContent = '#' + pad6(seed) + (M.mode === 'vs' && QSCORE !== null && seed === QSEED ? ' · beat ' + QSCORE.toLocaleString() : '');
   $('#modeChip').textContent = M.mode === 'vs' ? 'You vs AI' : 'Solo';
 }
 function updateHUD(v) {
@@ -547,6 +547,11 @@ async function finish(kind) {
     sub = kind === 'win' ? `You beat it by ${(y - a).toLocaleString()}. Send the board to a friend.` : kind === 'lose' ? `It won by ${(a - y).toLocaleString()}. Same start, different pieces. Rematch?` : 'Identical scores. Rematch?';
     $('#rScores').innerHTML = `<div class="${kind === 'win' ? 'win' : 'lose'}"><small>You</small><b>${y.toLocaleString()}</b></div><div class="${kind === 'lose' ? 'win' : 'lose'}"><small>AI</small><b>${a.toLocaleString()}</b></div>`;
     Sfx.play(kind === 'win' ? 'win' : 'lose');
+  }
+  if (M.mode === 'vs' && QSCORE !== null && M.seed === QSEED) {
+    sub = y > QSCORE ? `Challenge beaten. You topped their ${QSCORE.toLocaleString()} by ${(y - QSCORE).toLocaleString()}.`
+      : y === QSCORE ? `Dead even with their ${QSCORE.toLocaleString()}.`
+        : `Their ${QSCORE.toLocaleString()} still stands, ${(QSCORE - y).toLocaleString()} ahead of you.`;
   }
   const D = Stats.d;
   $('#rStats').innerHTML = `<div><b>${D.best.toLocaleString()}</b><small>Best</small></div>`
@@ -628,26 +633,296 @@ let toastT;
 function toast(msg) { const t = $('#toast'); t.textContent = msg; t.classList.add('show'); clearTimeout(toastT); toastT = setTimeout(() => t.classList.remove('show'), 3200); }
 const QP = new URLSearchParams(location.search);
 const QSEED = QP.has('seed') && /^\d+$/.test(QP.get('seed')) ? parseInt(QP.get('seed'), 10) : null;
+const qnum = k => QP.has(k) && /^\d{1,7}$/.test(QP.get(k)) ? parseInt(QP.get(k), 10) : null;
+const QSCORE = qnum('s'), QAI = qnum('a');
 
 $$('.mode').forEach(b => b.addEventListener('click', e => { const r = b.getBoundingClientRect(); enterGame(b.dataset.mode, e.clientX || r.left + r.width / 2, e.clientY || r.top + r.height / 2); }));
 $('#btnBack').addEventListener('click', exitGame);
 $('#rMenu').addEventListener('click', exitGame);
 $('#rRematch').addEventListener('click', () => rematch(M.seed));
 $('#rNew').addEventListener('click', () => rematch(randomSeed()));
-$('#rShare').addEventListener('click', async () => {
-  const url = `${location.origin}${location.pathname}?seed=${M.seed}`;
-  const text = M.mode === 'vs' ? `I scored ${M.you.game.score.toLocaleString()} against the AI on board #${pad6(M.seed)}. Can you beat it?` : `I scored ${M.you.game.score.toLocaleString()} on board #${pad6(M.seed)}.`;
-  try { if (navigator.share) { await navigator.share({ title: 'Block Puzzle', text, url }); return; } } catch (e) { return; }
-  try { await navigator.clipboard.writeText(text + ' ' + url); toast('Challenge link copied'); } catch (e) { prompt('Copy this link', url); }
-});
+const SHARE_ICONS = {
+  wa: '<path d="M3 21l1.6-4.8A8.5 8.5 0 1 1 8 19.5L3 21z"/><path d="M9 9.5c0 3 2.5 5.5 5.5 5.5l1-1.5-2-1-.8.8c-1-.4-1.8-1.2-2.2-2.2l.8-.8-1-2L9 9.5z"/>',
+  x: '<path d="M4 4l16 16M20 4L4 20"/>',
+  tg: '<path d="M21 4L3 11l6 2 2 6 3-4 5 3L21 4z"/><path d="M9 13l12-9"/>',
+  fb: '<path d="M15 3h-2.5A3.5 3.5 0 0 0 9 6.5V9H6.5v3.5H9V21h3.5v-8.5H15l.5-3.5h-3V6.5c0-.3.2-.5.5-.5H15V3z"/>',
+  mail: '<rect x="3" y="5" width="18" height="14" rx="3"/><path d="M4 7l8 6 8-6"/>',
+  sms: '<path d="M4 5h16v11H9l-5 4V5z"/>',
+  more: '<circle cx="5" cy="12" r="1.4"/><circle cx="12" cy="12" r="1.4"/><circle cx="19" cy="12" r="1.4"/>',
+  copy: '<rect x="8" y="8" width="12" height="12" rx="3"/><path d="M16 8V6a2 2 0 0 0-2-2H6a2 2 0 0 0-2 2v8a2 2 0 0 0 2 2h2"/>',
+  close: '<path d="M6 6l12 12M18 6L6 18"/>',
+  dl: '<path d="M12 4v11M7 11l5 5 5-5"/><path d="M5 20h14"/>'
+};
+const shareSvg = key => `<svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${SHARE_ICONS[key]}</svg>`;
+const shareEncode = encodeURIComponent;
+const escapeHTML = value => String(value).replace(/[&<>"']/g, char => ({
+  '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;'
+}[char]));
+
+function shareData() {
+  const vs = M.mode === 'vs', y = M.you.game.score, a = vs ? M.ai.game.score : null;
+  const url = `${location.origin}${location.pathname}?seed=${M.seed}&s=${y}` + (vs ? `&a=${a}` : '');
+  const text = vs
+    ? `I scored ${y.toLocaleString()} against the AI on board #${pad6(M.seed)}. The AI got ${a.toLocaleString()}. Can you beat us both?`
+    : `I scored ${y.toLocaleString()} on board #${pad6(M.seed)}. Can you beat it?`;
+  return { vs, y, a, url, text };
+}
+
+async function makeCard() {
+  try {
+    await document.fonts.load('800 100px Inter');
+  } catch (error) {
+    console.warn('Could not load Inter for the share image; using a fallback font.', error);
+  }
+  const { vs, y, a, url } = shareData();
+  const W = 1080, H = 1920, canvas = document.createElement('canvas');
+  canvas.width = W;
+  canvas.height = H;
+  const ctx = canvas.getContext('2d');
+  if (!ctx) throw new Error('Canvas is unavailable; cannot create the share image.');
+  const font = 'Inter,system-ui,-apple-system,sans-serif';
+  const letterSpacing = px => { if ('letterSpacing' in ctx) ctx.letterSpacing = px + 'px'; };
+  const text = (value, x, yPos, size, color, weight = 800, spacing = 0) => {
+    ctx.font = `${weight} ${size}px ${font}`;
+    ctx.fillStyle = color;
+    letterSpacing(spacing);
+    ctx.fillText(value, x, yPos);
+  };
+
+  ctx.fillStyle = '#121211';
+  ctx.fillRect(0, 0, W, H);
+  const glow = ctx.createRadialGradient(W / 2, -80, 0, W / 2, -80, 1300);
+  glow.addColorStop(0, 'rgba(255,255,255,.12)');
+  glow.addColorStop(1, 'rgba(255,255,255,0)');
+  ctx.fillStyle = glow;
+  ctx.fillRect(0, 0, W, H);
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'middle';
+
+  const markSize = 36, markGap = 8, markX = W / 2 - (markSize * 2 + markGap) / 2, markY = 110;
+  [[0, 0, 1], [1, 1, 1], [1, 0, .3], [0, 1, .3]].forEach(([col, row, alpha]) => {
+    rr(ctx, markX + col * (markSize + markGap), markY + row * (markSize + markGap), markSize, markSize, 11);
+    ctx.fillStyle = `rgba(245,245,240,${alpha})`;
+    ctx.fill();
+  });
+  text('BLOCK PUZZLE', W / 2, 262, 32, 'rgba(245,245,240,.7)', 700, 9);
+
+  const headline = !vs ? 'MY SCORE' : y > a ? 'I BEAT THE AI' : y < a ? 'THE AI BEAT ME' : 'DEAD EVEN WITH THE AI';
+  text(headline, W / 2, 400, 36, 'rgba(245,245,240,.56)', 700, 9);
+  let scoreSize = 290;
+  const scoreText = y.toLocaleString();
+  ctx.font = `800 ${scoreSize}px ${font}`;
+  letterSpacing(-scoreSize * .05);
+  const measured = ctx.measureText(scoreText).width;
+  if (measured > 900) scoreSize = Math.floor(scoreSize * 900 / measured);
+  text(scoreText, W / 2, 565, scoreSize, '#f5f5f0', 800, -scoreSize * .05);
+  text(vs ? `vs AI  ${a.toLocaleString()}` : 'Solo run', W / 2, 700, 46, 'rgba(245,245,240,.56)', 600);
+
+  const cell = 90, boardX = (W - cell * 8) / 2, boardY = 800;
+  rr(ctx, boardX - 30, boardY - 30, cell * 8 + 60, cell * 8 + 60, 56);
+  ctx.fillStyle = 'rgba(255,255,255,.05)';
+  ctx.fill();
+  ctx.strokeStyle = 'rgba(255,255,255,.12)';
+  ctx.lineWidth = 2;
+  ctx.stroke();
+  new Game(M.seed).board.forEach((value, index) => {
+    const x = boardX + (index % 8) * cell, yPos = boardY + Math.floor(index / 8) * cell;
+    if (value) drawBlock(ctx, x, yPos, cell, RGB[9]);
+    else {
+      rr(ctx, x + 5, yPos + 5, cell - 10, cell - 10, 22);
+      ctx.fillStyle = 'rgba(255,255,255,.06)';
+      ctx.fill();
+    }
+  });
+  text(`BOARD #${pad6(M.seed)}`, W / 2, boardY + cell * 8 + 82, 30, 'rgba(245,245,240,.5)', 700, 8);
+
+  text('Can you beat it?', W / 2, 1670, 84, '#ffd08a', 800, -3);
+  text(url.replace(/^https?:\/\//, '').replace(/\?.*$/, ''), W / 2, 1752, 34, 'rgba(245,245,240,.56)', 600);
+  ctx.fillStyle = 'rgba(255,255,255,.1)';
+  ctx.fillRect(W / 2 - 260, 1810, 520, 2);
+  text('BLOCK PUZZLE  ·  ONYERIKAM', W / 2, 1860, 26, 'rgba(245,245,240,.4)', 700, 7);
+
+  return new Promise((resolve, reject) => {
+    canvas.toBlob(blob => blob ? resolve(blob) : reject(new Error('The browser could not encode the share image.')), 'image/png');
+  });
+}
+
+async function saveImage(button) {
+  const label = $('em', button).textContent, status = $('em', button);
+  button.disabled = true;
+  status.textContent = 'Drawing…';
+  const reset = () => setTimeout(() => {
+    status.textContent = label;
+    button.disabled = false;
+    button.classList.remove('done');
+  }, 1800);
+
+  try {
+    const blob = await makeCard(), { text, url } = shareData();
+    const file = new File([blob], `block-puzzle-${pad6(M.seed)}.png`, { type: 'image/png' });
+    if (coarse && navigator.canShare && navigator.canShare({ files: [file] })) {
+      try {
+        await navigator.share({ files: [file], title: 'Block Puzzle', text, url });
+        status.textContent = 'Shared';
+        button.classList.add('done');
+      } catch (error) {
+        if (error.name === 'AbortError') {
+          status.textContent = label;
+          button.disabled = false;
+          return;
+        }
+        throw error;
+      }
+    } else {
+      const link = document.createElement('a');
+      link.href = URL.createObjectURL(blob);
+      link.download = file.name;
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      setTimeout(() => URL.revokeObjectURL(link.href), 4000);
+      status.textContent = 'Saved';
+      button.classList.add('done');
+    }
+  } catch (error) {
+    console.error('Could not save the share image.', error);
+    status.textContent = 'Could not save';
+    toast('Could not save the image. Please try again.');
+  }
+  reset();
+}
+
+function openShare() {
+  const { vs, y, a, url, text } = shareData();
+  let box = $('#share');
+  if (!box) {
+    box = document.createElement('div');
+    box.id = 'share';
+    box.hidden = true;
+    document.body.appendChild(box);
+  }
+
+  const cells = new Game(M.seed).board.map(value => `<i class="${value ? 'on' : ''}"></i>`).join('');
+  const apps = [
+    { n: 'WhatsApp', k: 'wa', c: '#25d366', h: `https://wa.me/?text=${shareEncode(text + ' ' + url)}` },
+    { n: 'X', k: 'x', c: '#ffffff', h: `https://twitter.com/intent/tweet?text=${shareEncode(text)}&url=${shareEncode(url)}` },
+    { n: 'Telegram', k: 'tg', c: '#2aabee', h: `https://t.me/share/url?url=${shareEncode(url)}&text=${shareEncode(text)}` },
+    { n: 'Facebook', k: 'fb', c: '#4c8dff', h: `https://www.facebook.com/sharer/sharer.php?u=${shareEncode(url)}` },
+    { n: 'Email', k: 'mail', c: '#ffd08a', h: `mailto:?subject=${shareEncode('Beat my Block Puzzle score')}&body=${shareEncode(text + '\n\n' + url)}` },
+    { n: 'Messages', k: 'sms', c: '#8fe0c8', h: `sms:?&body=${shareEncode(text + ' ' + url)}` }
+  ];
+  if (navigator.share) apps.push({ n: 'More', k: 'more', c: '#b4c0ff', native: true });
+
+  box.innerHTML = `
+    <div class="sh-back"></div>
+    <div class="sh-sheet" role="dialog" aria-modal="true" aria-label="Share your result">
+      <span class="sh-grab" aria-hidden="true"></span>
+      <button class="sh-x" type="button" aria-label="Close">${shareSvg('close')}</button>
+
+      <div class="sh-card">
+        <div class="mini sh-board" aria-hidden="true">${cells}</div>
+        <div class="sh-info">
+          <small>Board #${pad6(M.seed)}</small>
+          <b>${y.toLocaleString()}</b>
+          <span>${vs ? 'vs AI ' + a.toLocaleString() : 'Solo run'}</span>
+        </div>
+        <div class="sh-wm">
+          <svg viewBox="0 0 64 64" width="12" height="12" aria-hidden="true"><rect x="6" y="6" width="26" height="26" rx="8" fill="currentColor"/><rect x="32" y="32" width="26" height="26" rx="8" fill="currentColor"/><rect x="32" y="6" width="26" height="26" rx="8" fill="currentColor" opacity=".3"/><rect x="6" y="32" width="26" height="26" rx="8" fill="currentColor" opacity=".3"/></svg>
+          Block Puzzle · Onyerikam
+        </div>
+      </div>
+
+      <div class="sh-apps">
+        ${apps.map((app, index) => `<button class="sh-app" type="button" data-i="${index}" style="--c:${app.c};--i:${index}"><span class="sh-ico">${shareSvg(app.k)}</span><small>${app.n}</small></button>`).join('')}
+      </div>
+
+      <div class="sh-link">
+        <span>${escapeHTML(url.replace(/^https?:\/\//, ''))}</span>
+        <button class="sh-copy" type="button">${shareSvg('copy')}<em>Copy</em></button>
+      </div>
+
+      <button class="sh-save" type="button">${shareSvg('dl')}<em>Save image for stories</em></button>
+    </div>`;
+
+  clearTimeout(box._closeTimer);
+  const close = () => {
+    box.classList.remove('on');
+    clearTimeout(box._closeTimer);
+    box._closeTimer = setTimeout(() => {
+      box.hidden = true;
+      $('#rShare').focus();
+    }, 450);
+  };
+  const copy = async () => {
+    try {
+      await navigator.clipboard.writeText(text + ' ' + url);
+    } catch (error) {
+      prompt('Copy this link', url);
+      return;
+    }
+    const label = $('.sh-copy em', box), button = $('.sh-copy', box);
+    label.textContent = 'Copied';
+    button.classList.add('done');
+    setTimeout(() => {
+      label.textContent = 'Copy';
+      button.classList.remove('done');
+    }, 1600);
+  };
+
+  $('.sh-back', box).onclick = close;
+  $('.sh-x', box).onclick = close;
+  $('.sh-copy', box).onclick = copy;
+  $('.sh-save', box).onclick = e => saveImage(e.currentTarget);
+  $$('.sh-app', box).forEach(button => {
+    button.onclick = async () => {
+      const app = apps[Number(button.dataset.i)];
+      if (!app.native) {
+        window.open(app.h, '_blank', 'noopener');
+        return;
+      }
+      try {
+        await navigator.share({ title: 'Block Puzzle', text, url });
+        close();
+      } catch (error) {
+        if (error.name !== 'AbortError') toast('Could not open the share menu.');
+      }
+    };
+  });
+
+  box._close = close;
+  box.hidden = false;
+  void box.offsetWidth;
+  box.classList.add('on');
+  $('.sh-x', box).focus();
+}
+$('#rShare').addEventListener('click', openShare);
 $('#btnSound').addEventListener('click', () => {
   Sfx.ensure(); Sfx.on = !Sfx.on; $('#icoOn').style.display = Sfx.on ? '' : 'none'; $('#icoOff').style.display = Sfx.on ? 'none' : '';
 });
-addEventListener('keydown', e => { if (e.key === 'Escape' && !$('#game').hidden) exitGame(); });
+addEventListener('keydown', e => {
+  if (e.key !== 'Escape') return;
+  const share = $('#share');
+  if (share && !share.hidden) {
+    e.preventDefault();
+    share._close();
+  } else if (!$('#game').hidden) exitGame();
+});
 
 if (QSEED !== null) {
-  $('#challenge').hidden = false; $('#challengeText').textContent = `Board #${pad6(QSEED)}. Beat the AI on the exact same game.`;
-  $('#pillText').textContent = 'Challenge received. Accept it'; $('.mode.vs').classList.add('pulse'); $('#heroCta span').textContent = 'Accept the challenge';
+  const sc = QSCORE !== null;
+  $('#challenge').innerHTML = `<b>Challenge received.</b> <span>Board #${pad6(QSEED)}. Same game, same start.</span>`
+    + (sc ? `<div class="ch-scores"><div><small>Score to beat</small><b>${QSCORE.toLocaleString()}</b></div>`
+      + (QAI !== null ? `<div><small>AI on this board</small><b>${QAI.toLocaleString()}</b></div>` : '') + `</div>` : '');
+  $('#challenge').hidden = false;
+  $('#pillText').textContent = sc ? `Beat ${QSCORE.toLocaleString()} on board #${pad6(QSEED)}` : 'Challenge received. Accept it';
+  $('.mode.vs').classList.add('pulse');
+  $('#heroCta span').textContent = 'Accept the challenge';
+  const accept = e => {
+    e.preventDefault();
+    const r = e.currentTarget.getBoundingClientRect();
+    enterGame('vs', e.clientX || r.left + r.width / 2, e.clientY || r.top + r.height / 2);
+  };
+  ['#heroCta', '#heroPill', '.nav-cta'].forEach(s => $(s).addEventListener('click', accept));
 }
 
 /* =========================================================
