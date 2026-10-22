@@ -2,7 +2,7 @@
 
 > A 711 KB neural network that dreams ahead to beat you at blocks.
 
-Live demo → **[blockpuzzle.onyerikam.com](https://blockpuzzle.onyerikam.com/)** · Play solo or go head-to-head against the AI in your browser. No install. No server. No accounts.
+Live demo → **[webessentz.github.io/block-dreamer](https://webessentz.github.io/block-dreamer)** · Play solo or go head-to-head against the AI in your browser. No install. No server. No accounts.
 
 ---
 
