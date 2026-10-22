@@ -2325,3 +2325,137 @@ h2 {
         grid-template-columns: repeat(3, 1fr)
     }
 }
+
+/* Spectator mode */
+#spec {
+    position: absolute;
+    left: 50%;
+    bottom: max(18px, env(safe-area-inset-bottom));
+    z-index: 6;
+    display: flex;
+    align-items: center;
+    gap: 16px;
+    padding: 7px 7px 7px 20px;
+    border-radius: 999px;
+    max-width: calc(100vw - 24px);
+    opacity: 0;
+    pointer-events: none;
+    transform: translate(-50%, 26px) scale(.96);
+    transition: opacity .5s var(--ease), transform .6s var(--ease)
+}
+
+#spec.show {
+    opacity: 1;
+    pointer-events: auto;
+    transform: translate(-50%, 0)
+}
+
+.sp-live {
+    display: flex;
+    align-items: center;
+    gap: 9px;
+    font-size: 13px;
+    font-weight: 700;
+    white-space: nowrap
+}
+
+.sp-live i {
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    background: var(--hot);
+    animation: spLive 1.4s ease-in-out infinite
+}
+
+@keyframes spLive {
+    50% {
+        opacity: .3;
+        transform: scale(.65)
+    }
+}
+
+.sp-msg {
+    font-size: 13px;
+    color: var(--mut);
+    white-space: nowrap;
+    font-variant-numeric: tabular-nums;
+    transition: color .4s
+}
+
+#spec.lead .sp-msg {
+    color: var(--hot)
+}
+
+.sp-speed {
+    display: flex;
+    gap: 3px;
+    padding: 3px;
+    border-radius: 999px;
+    background: rgba(var(--ink), .08)
+}
+
+.sp-speed button {
+    min-width: 44px;
+    padding: 8px 12px;
+    border-radius: 999px;
+    font-size: 13px;
+    font-weight: 700;
+    color: var(--mut);
+    transition: background .3s, color .3s
+}
+
+.sp-speed button.on {
+    background: var(--fg);
+    color: var(--bg)
+}
+
+.arena.vs .panel {
+    transition: width .7s var(--ease), opacity .6s, filter .6s
+}
+
+.arena.spectate .panel.you {
+    opacity: .5;
+    filter: saturate(.55)
+}
+
+.arena.spectate .panel {
+    width: min(46vw, calc((100svh - 260px) * .774))
+}
+
+@media (max-width: 760px) {
+    .arena.vs.spectate {
+        justify-content: flex-start;
+        padding-bottom: 96px
+    }
+
+    .arena.vs.spectate .panel.ai {
+        width: min(86vw, calc(100svh - 440px))
+    }
+
+    .arena.vs.spectate .panel.ai .p-head .score {
+        font-size: 34px
+    }
+
+    .arena.vs.spectate .panel.you {
+        width: min(38vw, 20svh)
+    }
+}
+
+@media (max-width: 560px) {
+    #spec {
+        flex-wrap: wrap;
+        justify-content: center;
+        gap: 8px 14px;
+        padding: 12px 12px 8px;
+        border-radius: 26px;
+        width: calc(100vw - 24px)
+    }
+
+    .sp-msg {
+        order: 3;
+        width: 100%;
+        text-align: center;
+        font-size: 12.5px;
+        margin-bottom: 2px
+    }
+}

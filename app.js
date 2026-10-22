@@ -357,7 +357,7 @@ class BoardView {
 /* =========================================================
    MATCH (solo / versus)
 ========================================================= */
-const M = { mode: 'solo', seed: 0, you: null, ai: null, running: false, ended: false, raf: 0, last: 0, token: 0, ctl: null };
+const M = { mode: 'solo', seed: 0, you: null, ai: null, running: false, ended: false, raf: 0, last: 0, token: 0, ctl: null, speed: 3 };
 const randomSeed = () => Math.floor(Math.random() * 1e6);
 const pad6 = n => String(n).padStart(6, '0');
 const STAT_KEY = 'bp_stats';
@@ -472,11 +472,35 @@ function buildArena(mode) {
   M.you.onPick = () => Sfx.play('pick');
   M.you.onBad = () => Sfx.play('bad');
   M.you.onInfo = (v, info) => Sfx.onInfo(info);
+  buildSpectate(vs);
+}
+function buildSpectate(vs) {
+  const old = $('#spec'); if (old) old.remove();
+  if (!vs) return;
+  const s = document.createElement('div'); s.id = 'spec'; s.className = 'glass';
+  s.innerHTML = `<span class="sp-live"><i></i>Watching the AI</span><span class="sp-msg"></span>
+    <div class="sp-speed" role="group" aria-label="Playback speed"><button type="button" data-s="1">1×</button><button type="button" data-s="3" class="on">3×</button><button type="button" data-s="8">Max</button></div>`;
+  $('#game').appendChild(s);
+  $$('.sp-speed button', s).forEach(b => b.addEventListener('click', () => {
+    M.speed = Number(b.dataset.s);
+    $$('.sp-speed button', s).forEach(x => x.classList.toggle('on', x === b));
+  }));
+}
+function updateSpectate() {
+  const s = $('#spec'); if (!s) return;
+  const on = !!M.ai && M.running && !M.ended && M.you.game.over && !M.ai.game.over;
+  s.classList.toggle('show', on); $('#arena').classList.toggle('spectate', on);
+  if (!on) return;
+  const y = M.you.game.score, a = M.ai.game.score;
+  const msg = a > y ? `AI leads by ${(a - y).toLocaleString()}` : a === y ? 'Dead level' : `AI needs ${(y - a + 1).toLocaleString()} to pass you`;
+  if (msg !== s._m) { s._m = msg; $('.sp-msg', s).textContent = msg; }
+  s.classList.toggle('lead', a > y);
 }
 function newGames(seed) {
   M.seed = seed;
   M.you.setGame(new Game(seed)); if (M.ai) M.ai.setGame(new Game(seed, { altSeed: aiSeedOf(seed) }));
   M.you.locked = true;
+  M.speed = 3; $$('#spec .sp-speed button').forEach(b => b.classList.toggle('on', b.dataset.s === '3'));
   M.ctl = { phase: 'think', pending: false, hold: 0, wait: 0, res: null, mv: null };
   $('#seedChip').textContent = '#' + pad6(seed) + (M.mode === 'vs' && QSCORE !== null && seed === QSEED ? ' · beat ' + QSCORE.toLocaleString() : '');
   $('#modeChip').textContent = M.mode === 'vs' ? 'You vs AI' : 'Solo';
@@ -499,7 +523,7 @@ function updateHUD(v) {
 function aiStep(dt) {
   const v = M.ai; if (!v) return; const g = v.game, c = M.ctl, st = v.hud.status;
   if (g.over) { st.textContent = 'Out of moves'; st.classList.remove('think'); v.aiMove = null; v.ghost = []; return; }
-  const sp = M.you.game.over ? 3 : 1;
+  const sp = M.you.game.over ? M.speed : 1;
   if (c.phase === 'think') {
     st.textContent = 'Dreaming ahead'; st.classList.add('think');
     if (!c.pending) {
@@ -528,7 +552,6 @@ function checkEnd() {
   const a = M.ai.game;
   if (y.over && a.over) finish(y.score > a.score ? 'win' : y.score < a.score ? 'lose' : 'draw');
   else if (a.over && y.score > a.score) finish('win');
-  else if (y.over && a.score > y.score) finish('lose');
 }
 async function finish(kind) {
   M.ended = true; M.running = false; M.you.locked = true; const tok = M.token;
@@ -569,6 +592,7 @@ function frame(ts) {
   for (const v of [M.you, M.ai]) if (v) { v.fx.update(dt, v.game.score); v.update(dt); v.draw(t); updateHUD(v); }
   if (M.ai) { const a = M.ai.game.score, y = M.you.game.score; $('.lead').style.setProperty('--lead', (y + a ? y / (y + a) : .5).toFixed(3)); }
   if (M.running) { aiStep(dt); checkEnd(); }
+  updateSpectate();
 }
 async function countdown(tok) {
   const el = $('#countdown');
@@ -619,6 +643,7 @@ async function enterGame(mode, x, y) {
 }
 async function exitGame() {
   if (M.busy) return; M.busy = true; M.token++; M.running = false;
+  const spec = $('#spec'); if (spec) spec.remove(); $('#arena').classList.remove('spectate');
   await irisIn(innerWidth / 2, innerHeight / 2);
   cancelAnimationFrame(M.raf); M.raf = 0; $('#game').hidden = true; $('#result').hidden = true; $('#countdown').textContent = '';
   document.body.classList.remove('in-game'); $('#landing').style.display = ''; window.scrollTo(0, savedScroll);
