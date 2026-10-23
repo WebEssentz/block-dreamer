@@ -6,6 +6,8 @@ const $$ = (s, r = document) => [...r.querySelectorAll(s)];
 // build stamp from our own <script src="app.js?v=...">; passed on to the worker so it
 // can never pair a fresh page with a stale cached engine.js
 const BUILD = (document.currentScript && new URL(document.currentScript.src).search) || '';
+// anonymous event count (GoatCounter); silently does nothing if blocked or not loaded yet
+const track = (path, title) => { try { if (window.goatcounter && window.goatcounter.count) window.goatcounter.count({ path, title: title || path, event: true }); } catch (e) { /* counting must never break the game */ } };
 const sleep = ms => new Promise(r => setTimeout(r, ms));
 const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
 const reduce = matchMedia('(prefers-reduced-motion: reduce)').matches;
@@ -754,6 +756,7 @@ async function askHint() {
     if (tok !== M.token || ver !== v.ver || v.game.over) return;          // the board moved on: this hint is stale
     if (res.none || !v.game.canPlace(res.i, res.r, res.c)) { toast('The AI sees no good move here.'); return; }
     v.hint = { i: res.i, r: res.r, c: res.c }; M.tools.hint--; M.tools.coolUntil = performance.now() + HINT_COOLDOWN; Sfx.play('hint');
+    track('hint/' + (M.mode === 'vs' ? level : 'solo'));
   } catch (e) {
     console.warn('Hint failed.', e); if (tok === M.token) toast('Hints are unavailable right now.');
   } finally {
@@ -809,6 +812,7 @@ async function finish(kind) {
   M.ended = true; M.running = false; M.watchPrompt = false; $('#watchPrompt').hidden = true; M.you.locked = true; const tok = M.token;
   await sleep(1100); if (tok !== M.token) return;
   const y = M.you.game.score, a = M.ai ? M.ai.game.score : 0;
+  track(kind === 'solo' ? 'match-end/solo' : 'match-end/' + kind + '-' + level);
   const R = $('#result'); let title, kicker = 'Final', sub = '';
   if (kind === 'solo') {
     const prev = Stats.d.best, isBest = Stats.record('solo', y, 0);
@@ -870,6 +874,7 @@ async function begin() {                    // countdown, then go
   }
   if (!(await countdown(tok))) return;
   M.you.locked = false; M.running = true;
+  track(M.mode === 'vs' ? 'match-start/vs-' + level : 'match-start/solo');
 }
 function rematch(seed) { M.token++; newGames(seed); begin(); }
 function chooseSpectate(watch) {
@@ -931,7 +936,7 @@ const qnum = k => QP.has(k) && /^\d{1,7}$/.test(QP.get(k)) ? parseInt(QP.get(k),
 const QSCORE = qnum('s'), QAI = qnum('a');
 
 $$('.mode').forEach(b => b.addEventListener('click', e => {
-  if (b.dataset.mode === 'friends') { toast('Friend matches are coming soon.'); return; }
+  if (b.dataset.mode === 'friends') { toast('Friend matches are coming soon.'); track('friends-card'); return; }
   const r = b.getBoundingClientRect(); enterGame(b.dataset.mode, e.clientX || r.left + r.width / 2, e.clientY || r.top + r.height / 2);
 }));
 
@@ -1133,6 +1138,7 @@ async function saveImage(button) {
 }
 
 function openShare() {
+  track('share-open');
   const { vs, y, a, url, text } = shareData();
   let box = $('#share');
   if (!box) {
