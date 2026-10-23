@@ -2909,3 +2909,680 @@ h2 {
         padding-bottom: 0
     }
 }
+
+/* hint cooldown: a quiet bar drains under the label until the next hint is ready */
+.tool.t-hint.cool {
+    overflow: hidden
+}
+
+.tool.t-hint.cool::after {
+    content: "";
+    position: absolute;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    height: 100%;
+    background: rgba(var(--ink), .1);
+    transform-origin: left;
+    animation: hintCool var(--cd, 30s) linear both;
+    pointer-events: none
+}
+
+.tool.t-hint.cool .t-lab {
+    font-variant-numeric: tabular-nums
+}
+
+@keyframes hintCool {
+    from {
+        transform: scaleX(1)
+    }
+
+    to {
+        transform: scaleX(0)
+    }
+}
+
+/* hint button while cooling down: readable, not greyed out */
+.tool.t-hint.cool:disabled {
+    opacity: .78
+}
+
+/* ---------- play overlay ---------- */
+body.pick-open {
+    overflow: hidden
+}
+
+.pick {
+    position: fixed;
+    inset: 0;
+    z-index: 150;
+    overflow-y: auto;
+    overscroll-behavior: contain;
+    scrollbar-width: none;
+    background:
+        radial-gradient(1100px 620px at 85% -10%, rgba(var(--ink), .09), transparent 60%),
+        radial-gradient(900px 520px at 0% 110%, rgba(var(--ink), .06), transparent 60%),
+        rgba(var(--bgc), .7);
+    backdrop-filter: blur(34px) saturate(1.6);
+    -webkit-backdrop-filter: blur(34px) saturate(1.6);
+    /* revealed from the right edge across to the left */
+    clip-path: inset(0 0 0 100%);
+    transition: clip-path .85s var(--ease)
+}
+
+.pick::-webkit-scrollbar {
+    display: none
+}
+
+.pick.on {
+    clip-path: inset(0 0 0 0)
+}
+
+.pick.off {
+    clip-path: inset(0 100% 0 0);
+    transition-duration: .65s
+}
+
+/* a bright glass edge rides the reveal */
+.pk-edge {
+    position: fixed;
+    top: 0;
+    bottom: 0;
+    left: 0;
+    width: 2px;
+    pointer-events: none;
+    background: linear-gradient(180deg, transparent, rgba(var(--ink), .55) 30%, rgba(var(--ink), .55) 70%, transparent);
+    box-shadow: 0 0 40px 10px rgba(var(--ink), .12);
+    opacity: 0;
+    transform: translateX(100vw)
+}
+
+.pick.on .pk-edge {
+    animation: pkEdge .85s var(--ease) both
+}
+
+@keyframes pkEdge {
+    0% {
+        opacity: 1;
+        transform: translateX(100vw)
+    }
+
+    85% {
+        opacity: 1
+    }
+
+    100% {
+        opacity: 0;
+        transform: translateX(-4px)
+    }
+}
+
+/* slow ambient light behind the glass */
+.pk-glow {
+    position: fixed;
+    inset: 0;
+    pointer-events: none;
+    overflow: hidden
+}
+
+.pk-glow i {
+    position: absolute;
+    width: 60vmax;
+    height: 60vmax;
+    border-radius: 50%;
+    background: radial-gradient(closest-side, rgba(var(--ink), .07), transparent);
+    animation: pkDrift 14s ease-in-out infinite alternate;
+    will-change: transform
+}
+
+.pk-glow i:first-child {
+    top: -25vmax;
+    right: -15vmax
+}
+
+.pk-glow i + i {
+    bottom: -30vmax;
+    left: -20vmax;
+    animation-duration: 18s;
+    animation-direction: alternate-reverse
+}
+
+@keyframes pkDrift {
+    to {
+        transform: translate(-8vmax, 6vmax) scale(1.15)
+    }
+}
+
+.pk-wrap {
+    position: relative;
+    min-height: 100%;
+    max-width: 1180px;
+    margin: 0 auto;
+    padding: max(18px, env(safe-area-inset-top)) var(--pad) max(28px, env(safe-area-inset-bottom));
+    display: flex;
+    flex-direction: column
+}
+
+.pk-top {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px
+}
+
+.pk-top .brand {
+    display: inline-flex;
+    align-items: center;
+    gap: 10px;
+    font-size: 15px
+}
+
+.pk-head {
+    margin-top: clamp(28px, 7vh, 72px)
+}
+
+.pk-head .eyebrow {
+    margin-bottom: 10px
+}
+
+.pk-head h2 {
+    font-size: clamp(42px, 7.5vw, 96px);
+    letter-spacing: -.055em
+}
+
+.pk-level {
+    display: flex;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 12px 16px;
+    margin-top: clamp(18px, 3vh, 28px)
+}
+
+.pk-level > small {
+    font-size: 11px;
+    font-weight: 600;
+    letter-spacing: .16em;
+    text-transform: uppercase;
+    color: var(--mut)
+}
+
+.pk-grid {
+    display: grid;
+    grid-template-columns: 1fr 1.08fr 1fr;
+    gap: 14px;
+    margin-top: clamp(22px, 4vh, 40px);
+    padding-bottom: 8px
+}
+
+/* liquid-glass cards; the overlay is already frosted, so no second backdrop blur here */
+.pk-card.mode {
+    --rx: 0deg;
+    --ry: 0deg;
+    --lift: 0px;
+    position: relative;
+    isolation: isolate;
+    min-height: clamp(280px, 40vh, 390px);
+    display: grid;
+    grid-template-columns: auto 1fr;
+    grid-template-rows: auto 1fr auto auto auto;
+    grid-template-areas: "ico tags" "gap gap" "h h" "p p" "go go";
+    align-items: start;
+    border-radius: 32px;
+    color: var(--fg);
+    background:
+        linear-gradient(175deg, rgba(255, 255, 255, .08), transparent 42%),
+        linear-gradient(165deg, rgba(var(--ink), .1), rgba(var(--ink), .025) 55%, rgba(var(--ink), .045));
+    border: 1px solid rgba(var(--ink), .12);
+    box-shadow:
+        inset 0 1.5px 0 var(--hi),
+        inset 0 -1px 0 rgba(var(--ink), .05),
+        0 30px 70px -36px var(--shadow);
+    transform: perspective(1000px) rotateX(var(--rx)) rotateY(var(--ry)) translateY(var(--lift));
+    transition: transform .6s var(--ease), border-color .4s, box-shadow .5s var(--ease), background .4s
+}
+
+.pk-card .m-ico {
+    grid-area: ico
+}
+
+.pk-card .pk-tags {
+    grid-area: tags
+}
+
+.pk-card.mode h3 {
+    grid-area: h;
+    margin-top: 0;
+    font-size: clamp(30px, 3.1vw, 42px);
+    line-height: 1.02
+}
+
+.pk-card.mode p {
+    grid-area: p
+}
+
+.pk-card .go {
+    grid-area: go
+}
+
+/* equal-height descriptions keep the three titles on one baseline */
+@media (min-width: 901px) {
+    .pk-card.mode p {
+        min-height: 4.5em
+    }
+}
+
+/* cursor light: follows the pointer across the glass */
+.pk-card.mode::before {
+    z-index: -1;
+    background: radial-gradient(360px circle at var(--mx, 50%) var(--my, 0%), rgba(var(--ink), .14), transparent 62%)
+}
+
+/* a bright streak glides across on hover */
+.pk-shine {
+    position: absolute;
+    inset: 0;
+    z-index: -1;
+    border-radius: inherit;
+    overflow: hidden;
+    pointer-events: none
+}
+
+.pk-shine::after {
+    content: "";
+    position: absolute;
+    top: -20%;
+    bottom: -20%;
+    width: 45%;
+    left: 0;
+    background: linear-gradient(100deg, transparent, rgba(255, 255, 255, .12), transparent);
+    transform: translateX(-140%) skewX(-12deg);
+    transition: transform 1s var(--ease)
+}
+
+.pk-card.mode:hover .pk-shine::after,
+.pk-card.mode:focus-visible .pk-shine::after {
+    transform: translateX(330%) skewX(-12deg)
+}
+
+.pk-card.mode:hover,
+.pk-card.mode:focus-visible {
+    --lift: -8px;
+    border-color: rgba(var(--ink), .28);
+    box-shadow: inset 0 1.5px 0 var(--hi), 0 46px 90px -34px var(--shadow)
+}
+
+.pk-card.mode:active {
+    --lift: -2px;
+    transition-duration: .15s
+}
+
+.pk-card.mode:focus-visible {
+    outline: 2px solid rgba(var(--ink), .5);
+    outline-offset: 3px
+}
+
+.pk-card.mode.vs {
+    background:
+        linear-gradient(175deg, rgba(255, 255, 255, .1), transparent 42%),
+        linear-gradient(165deg, rgba(var(--ink), .15), rgba(var(--ink), .05) 55%, rgba(var(--ink), .07));
+    border-color: rgba(var(--ink), .18)
+}
+
+/* "Go" line: the arrow runs ahead and a hairline draws under it */
+.pk-card .go {
+    position: relative;
+    padding-bottom: 4px
+}
+
+.pk-card .go::after {
+    content: "";
+    position: absolute;
+    left: 0;
+    bottom: 0;
+    height: 1.5px;
+    width: 100%;
+    background: currentColor;
+    transform: scaleX(0);
+    transform-origin: left;
+    transition: transform .5s var(--ease)
+}
+
+.pk-card.mode:hover .go::after {
+    transform: scaleX(1)
+}
+
+.pk-card .go .soon {
+    font-style: normal;
+    font-size: 11px;
+    font-weight: 700;
+    letter-spacing: .06em;
+    margin-left: 6px;
+    padding: 3px 9px;
+    border-radius: 999px;
+    color: var(--mut);
+    border: 1px solid rgba(var(--ink), .22)
+}
+
+/* icon motion */
+.pk-card .m-ico svg * {
+    transform-box: fill-box;
+    transform-origin: center;
+    transition: transform .6s var(--ease), opacity .45s
+}
+
+.ico-solo .b {
+    opacity: .4
+}
+
+.pk-card.mode:hover .ico-solo .a {
+    opacity: .4;
+    transform: rotate(90deg) scale(.86)
+}
+
+.pk-card.mode:hover .ico-solo .b {
+    opacity: 1;
+    transform: rotate(-90deg) scale(1.08)
+}
+
+.ico-vs .m {
+    opacity: .6
+}
+
+.pk-card.mode:hover .ico-vs .l {
+    transform: translateX(-3px)
+}
+
+.pk-card.mode:hover .ico-vs .r {
+    transform: translateX(3px)
+}
+
+.pk-card.mode:hover .ico-vs .m {
+    opacity: 1;
+    transform: scaleY(2)
+}
+
+.ico-friends .pal {
+    opacity: .45
+}
+
+.pk-card.mode:hover .ico-friends .me {
+    transform: translateX(-2px)
+}
+
+.pk-card.mode:hover .ico-friends .pal {
+    opacity: 1;
+    transform: translate(-3px, 1px)
+}
+
+/* feature tags share the icon's row, tucked to the right */
+.pk-tags {
+    display: flex;
+    flex-wrap: nowrap;
+    justify-content: flex-end;
+    align-content: flex-start;
+    gap: 6px;
+    margin: 4px 0 0 12px
+}
+
+.pk-tags i {
+    font-style: normal;
+    font-size: 11.5px;
+    font-weight: 600;
+    padding: 5px 10px;
+    border-radius: 999px;
+    color: var(--mut);
+    background: rgba(var(--ink), .06);
+    border: 1px solid var(--line);
+    white-space: nowrap;
+    transition: color .3s, border-color .3s, transform .5s var(--ease)
+}
+
+.pk-card.mode:hover .pk-tags i {
+    color: var(--fg);
+    border-color: rgba(var(--ink), .2)
+}
+
+.pk-card.mode:hover .pk-tags i:nth-child(1) { transform: translateY(-2px); transition-delay: 0s }
+.pk-card.mode:hover .pk-tags i:nth-child(2) { transform: translateY(-2px); transition-delay: .05s }
+.pk-card.mode:hover .pk-tags i:nth-child(3) { transform: translateY(-2px); transition-delay: .1s }
+
+/* ---------- light theme: crisp white glass, and the featured card goes ink-black ---------- */
+html[data-theme="light"] .pick {
+    background:
+        radial-gradient(1100px 620px at 85% -10%, rgba(255, 255, 255, .9), transparent 60%),
+        radial-gradient(900px 520px at 0% 110%, rgba(18, 18, 17, .05), transparent 60%),
+        rgba(238, 238, 232, .72)
+}
+
+html[data-theme="light"] .pk-card.mode {
+    background: linear-gradient(180deg, #fff, #fafaf6);
+    border-color: rgba(18, 18, 17, .07);
+    box-shadow:
+        inset 0 1px 0 #fff,
+        0 1px 2px rgba(18, 18, 17, .04),
+        0 30px 60px -30px rgba(18, 18, 17, .22)
+}
+
+html[data-theme="light"] .pk-card.mode:hover,
+html[data-theme="light"] .pk-card.mode:focus-visible {
+    border-color: rgba(18, 18, 17, .14);
+    box-shadow:
+        inset 0 1px 0 #fff,
+        0 2px 4px rgba(18, 18, 17, .04),
+        0 50px 90px -34px rgba(18, 18, 17, .32)
+}
+
+html[data-theme="light"] .pk-card.mode p {
+    color: rgba(18, 18, 17, .62)
+}
+
+html[data-theme="light"] .pk-shine::after {
+    background: linear-gradient(100deg, transparent, rgba(18, 18, 17, .05), transparent)
+}
+
+html[data-theme="light"] .pk-card.mode::before {
+    background: radial-gradient(360px circle at var(--mx, 50%) var(--my, 0%), rgba(18, 18, 17, .06), transparent 62%)
+}
+
+html[data-theme="light"] .pk-card.mode.vs {
+    color: #f5f5f0;
+    background:
+        radial-gradient(120% 80% at 0% 0%, rgba(255, 255, 255, .14), transparent 55%),
+        linear-gradient(165deg, #2a2a27, #121211);
+    border-color: #121211;
+    box-shadow:
+        inset 0 1px 0 rgba(255, 255, 255, .18),
+        0 34px 70px -28px rgba(18, 18, 17, .55)
+}
+
+html[data-theme="light"] .pk-card.mode.vs .m-ico {
+    color: #f5f5f0
+}
+
+html[data-theme="light"] .pk-card.mode.vs p {
+    color: rgba(245, 245, 240, .66)
+}
+
+html[data-theme="light"] .pk-card.mode.vs .badge {
+    background: #f5f5f0;
+    color: #121211
+}
+
+html[data-theme="light"] .pk-card.mode.vs::before {
+    background: radial-gradient(360px circle at var(--mx, 50%) var(--my, 0%), rgba(255, 255, 255, .16), transparent 62%)
+}
+
+html[data-theme="light"] .pk-card.mode.vs .pk-shine::after {
+    background: linear-gradient(100deg, transparent, rgba(255, 255, 255, .16), transparent)
+}
+
+/* staggered entrance once the glass has swept in */
+.pick .pk-top,
+.pick .pk-head,
+.pick .pk-level {
+    opacity: 0;
+    transform: translateX(48px)
+}
+
+.pick .pk-card.mode {
+    opacity: 0;
+    transform: perspective(1000px) translateX(48px)
+}
+
+.pick.on .pk-top,
+.pick.on .pk-head,
+.pick.on .pk-level {
+    opacity: 1;
+    transform: none;
+    transition: opacity .6s var(--ease), transform .8s var(--ease)
+}
+
+.pick.on .pk-card.mode {
+    opacity: 1;
+    transform: perspective(1000px) rotateX(var(--rx)) rotateY(var(--ry)) translateY(var(--lift));
+    transition: opacity .6s var(--ease), transform .8s var(--ease), border-color .4s, box-shadow .5s var(--ease)
+}
+
+.pick.on .pk-top { transition-delay: .12s }
+.pick.on .pk-head { transition-delay: .18s }
+.pick.on .pk-level { transition-delay: .24s }
+.pick.on .pk-card:nth-child(1) { transition-delay: .3s }
+.pick.on .pk-card:nth-child(2) { transition-delay: .36s }
+.pick.on .pk-card:nth-child(3) { transition-delay: .42s }
+
+/* once in, hover and tilt respond immediately */
+.pick.on.settled .pk-card.mode {
+    transition: transform .6s var(--ease), border-color .4s, box-shadow .5s var(--ease), background .4s;
+    transition-delay: 0s
+}
+
+.pick.on.settled .pk-card.mode.tilting {
+    transition: transform .12s linear, border-color .4s, box-shadow .5s var(--ease)
+}
+
+@media (max-width: 900px) {
+    .pk-grid {
+        grid-template-columns: 1fr;
+        gap: 10px
+    }
+
+    /* compact rows: icon left, words right */
+    .pk-card.mode {
+        min-height: 0;
+        grid-template-columns: 52px 1fr;
+        grid-template-rows: none;
+        grid-template-areas: "ico h" "ico p" "ico tags" "ico go";
+        column-gap: 16px;
+        padding: 20px 20px 18px;
+        border-radius: 26px
+    }
+
+    .pk-card .m-ico {
+        width: 48px;
+        height: 48px
+    }
+
+    .pk-card.mode h3 {
+        margin-top: 2px;
+        font-size: 26px
+    }
+
+    .pk-card.mode p {
+        font-size: 14px;
+        margin-top: 4px
+    }
+
+    .pk-card .pk-tags {
+        justify-content: flex-start;
+        margin: 10px 0 0
+    }
+
+    .pk-card .go {
+        margin-top: 12px;
+        font-size: 14px;
+        justify-self: start
+    }
+
+    .pk-card .badge {
+        top: 18px;
+        right: 18px
+    }
+
+    .pk-head {
+        margin-top: 28px
+    }
+}
+
+@media (pointer: coarse) {
+    .pick {
+        backdrop-filter: blur(16px) saturate(1.2);
+        -webkit-backdrop-filter: blur(16px) saturate(1.2);
+        background:
+            radial-gradient(900px 520px at 85% -10%, rgba(var(--ink), .08), transparent 60%),
+            rgba(var(--bgc), .86)
+    }
+
+    .pk-glow {
+        display: none
+    }
+}
+
+@supports not ((backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))) {
+    .pick {
+        background: rgba(var(--bgc), .97)
+    }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .pick,
+    .pick.off {
+        transition: none
+    }
+
+    .pk-edge {
+        display: none
+    }
+}
+
+/* level picker: the selected pill slides between options */
+.lvl {
+    position: relative
+}
+
+.lvl button {
+    position: relative;
+    z-index: 1
+}
+
+.lvl-pill {
+    position: absolute;
+    top: 4px;
+    bottom: 4px;
+    left: 0;
+    width: var(--w, 0);
+    transform: translateX(var(--x, 0));
+    border-radius: 999px;
+    background: var(--fg);
+    box-shadow: 0 6px 18px var(--shadow), inset 0 1px 0 rgba(255, 255, 255, .25);
+    transition: transform .55s var(--ease), width .55s var(--ease)
+}
+
+.lvl-pill.still {
+    transition: none
+}
+
+.lvl.has-pill button.on {
+    background: transparent;
+    box-shadow: none
+}
+
+.lvl button:active {
+    transform: scale(.95)
+}
+
+/* too narrow for the tags beside the icon: the description already says it */
+@media (min-width: 901px) and (max-width: 1040px) {
+    .pk-card .pk-tags {
+        display: none
+    }
+}

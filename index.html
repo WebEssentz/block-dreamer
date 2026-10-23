@@ -19,7 +19,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="style.css">
+  <link rel="stylesheet" href="style.css?v=20261023d">
 </head>
 
 <body>
@@ -317,6 +317,86 @@
     </div>
   </div>
 
+  <!-- PLAY OVERLAY: sweeps in over the page instead of scrolling to the modes -->
+  <div class="pick" id="pick" role="dialog" aria-modal="true" aria-labelledby="pickTitle" hidden>
+    <div class="pk-glow" aria-hidden="true"><i></i><i></i></div>
+    <div class="pk-edge" aria-hidden="true"></div>
+    <div class="pk-wrap">
+      <header class="pk-top">
+        <span class="brand">
+          <svg class="logo-mark" viewBox="0 0 64 64" width="30" height="30" fill="none" aria-hidden="true">
+            <rect x="32" y="6" width="26" height="26" rx="8" fill="var(--fg)" fill-opacity=".14" stroke="var(--fg)" stroke-opacity=".38" stroke-width="1.5"/>
+            <rect x="6" y="32" width="26" height="26" rx="8" fill="var(--fg)" fill-opacity=".14" stroke="var(--fg)" stroke-opacity=".38" stroke-width="1.5"/>
+            <rect x="6" y="6" width="26" height="26" rx="8" fill="var(--fg)"/>
+            <rect x="32" y="32" width="26" height="26" rx="8" fill="var(--fg)"/>
+            <rect x="10" y="9" width="18" height="4" rx="2" fill="#fff" fill-opacity=".30"/>
+            <rect x="36" y="35" width="18" height="4" rx="2" fill="#fff" fill-opacity=".30"/>
+          </svg><b>Block Puzzle</b>
+        </span>
+        <button class="icon glass pk-x" type="button" aria-label="Close">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"/></svg>
+        </button>
+      </header>
+
+      <div class="pk-head">
+        <span class="eyebrow">Ready?</span>
+        <h2 id="pickTitle">Choose your fight.</h2>
+      </div>
+
+      <div class="pk-level">
+        <small>AI level</small>
+        <div class="lvl glass" role="group" aria-label="AI level">
+          <button type="button" data-level="easy">Easy</button><button type="button" data-level="normal">Normal</button><button type="button" data-level="hard">Hard</button>
+        </div>
+        <span class="lvl-hint"></span>
+      </div>
+
+      <div class="pk-grid">
+        <button class="pk-card mode" type="button" data-mode="solo">
+          <span class="pk-shine" aria-hidden="true"></span>
+          <div class="m-ico ico-solo">
+            <svg viewBox="0 0 48 48" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+              <rect class="a" x="8" y="8" width="14" height="14" rx="4" />
+              <rect class="b" x="26" y="8" width="14" height="14" rx="4" />
+              <rect class="b" x="8" y="26" width="14" height="14" rx="4" />
+              <rect class="a" x="26" y="26" width="14" height="14" rx="4" />
+            </svg>
+          </div>
+          <h3>Solo</h3>
+          <p>Just you and the board. Chase your best score.</p>
+          <span class="go">Play <i>→</i></span>
+        </button>
+        <button class="pk-card mode vs" type="button" data-mode="vs">
+          <span class="pk-shine" aria-hidden="true"></span>
+          <span class="badge">AI</span>
+          <div class="m-ico ico-vs">
+            <svg viewBox="0 0 48 48" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+              <rect class="l" x="5" y="10" width="16" height="28" rx="5" />
+              <rect class="r" x="27" y="10" width="16" height="28" rx="5" />
+              <path class="m" d="M24 20v8" />
+            </svg>
+          </div>
+          <h3>You vs. AI</h3>
+          <p>Split screen. Same start, different pieces. Highest score wins.</p>
+          <span class="go">Play <i>→</i></span>
+        </button>
+        <button class="pk-card mode friends" type="button" data-mode="friends">
+          <span class="pk-shine" aria-hidden="true"></span>
+          <div class="m-ico ico-friends">
+            <svg viewBox="0 0 48 48" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+              <g class="me"><circle cx="17" cy="17" r="7" /><path d="M5 39c0-6.6 5.4-12 12-12s12 5.4 12 12" /></g>
+              <g class="pal"><circle cx="33" cy="15" r="6" /><path d="M31 25.2c.7-.1 1.3-.2 2-.2 5.5 0 10 4.5 10 10" /></g>
+            </svg>
+          </div>
+          <span class="pk-tags"><i>Invite link</i><i>Watch live</i></span>
+          <h3>With friends</h3>
+          <p>Create a match, send the link, race on the same board. Friends can watch live.</p>
+          <span class="go">Create a match <i>→</i><em class="soon">Soon</em></span>
+        </button>
+      </div>
+    </div>
+  </div>
+
   <div id="iris" aria-hidden="true">
     <div class="iris-mark"><i></i><i></i><i></i><i></i></div>
   </div>
@@ -359,8 +439,8 @@
       }
     })();
   </script>
-  <script src="engine.js"></script>
-  <script src="app.js"></script>
+  <script src="engine.js?v=20261023d"></script>
+  <script src="app.js?v=20261023d"></script>
 </body>
 
 </html>

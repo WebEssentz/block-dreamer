@@ -3,6 +3,9 @@
 const { GRID, Game, pieceSize, aiSeedOf } = Engine;
 const $ = (s, r = document) => r.querySelector(s);
 const $$ = (s, r = document) => [...r.querySelectorAll(s)];
+// build stamp from our own <script src="app.js?v=...">; passed on to the worker so it
+// can never pair a fresh page with a stale cached engine.js
+const BUILD = (document.currentScript && new URL(document.currentScript.src).search) || '';
 const sleep = ms => new Promise(r => setTimeout(r, ms));
 const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
 const reduce = matchMedia('(prefers-reduced-motion: reduce)').matches;
@@ -64,7 +67,7 @@ const makeAI = () => ({
   w: null, ready: false, err: null, id: 0, pend: new Map(), waiters: [],
   init() {
     if (this.w) return;
-    try { this.w = new Worker('ai-worker.js'); } catch (e) { this.err = e.message; return; }
+    try { this.w = new Worker('ai-worker.js' + BUILD); } catch (e) { this.err = e.message; return; }
     const flush = ok => this.waiters.splice(0).forEach(f => f(ok));
     this.w.onmessage = e => {
       const m = e.data;
@@ -353,23 +356,25 @@ class BoardView {
     if (fx.shake > .1) ctx.translate((Math.random() - .5) * fx.shake, (Math.random() - .5) * fx.shake);
     const bg = this.boardBg(); ctx.drawImage(bg, 0, 0, CW, bg.height / this.k);
 
-    // drag hint (rows/cols that would clear)
-    let lit = null, multi = false, hintRGB = null, spot = null, pose = null, hlR = [], hlC = [];
-    const d = this.drag;
-    if (d && g.hand[d.i]) {
-      const piece = g.hand[d.i]; pose = this.dragPose(d);
-      spot = pose.home ? null : this.snap(d.i, pose.fr, pose.fc);
-      if (spot) {
-        const sim = g.board.slice(); for (const [dr, dc] of piece.cells) sim[(spot.r + dr) * 8 + spot.c + dc] = piece.color;
-        for (let a = 0; a < 8; a++) {
-          let rf = true, cf = true; for (let b = 0; b < 8; b++) { if (!sim[a * 8 + b]) rf = false; if (!sim[b * 8 + a]) cf = false; }
-          if (rf) hlR.push(a); if (cf) hlC.push(a);
-        }
-        lit = new Set(); hlR.forEach(a => { for (let b = 0; b < 8; b++) lit.add(a * 8 + b); }); hlC.forEach(b => { for (let a = 0; a < 8; a++) lit.add(a * 8 + b); });
-        if (!lit.size) lit = null; multi = hlR.length + hlC.length >= 2; hintRGB = RGB[piece.color];
+    // rows/cols that would clear: for the piece being dragged, or else for the hint
+    let lit = null, multi = false, hintRGB = null, spot = null, pose = null, hlR = [], hlC = [], fromHint = false;
+    const d = this.drag, hn = this.hint, hp = hn && g.hand[hn.i];
+    const lines = (piece, r0, c0) => {
+      const sim = g.board.slice(); for (const [dr, dc] of piece.cells) sim[(r0 + dr) * 8 + c0 + dc] = piece.color;
+      for (let a = 0; a < 8; a++) {
+        let rf = true, cf = true; for (let b = 0; b < 8; b++) { if (!sim[a * 8 + b]) rf = false; if (!sim[b * 8 + a]) cf = false; }
+        if (rf) hlR.push(a); if (cf) hlC.push(a);
       }
-    }
-    const pulse = .5 + .5 * Math.sin(t * 10);
+      lit = new Set(); hlR.forEach(a => { for (let b = 0; b < 8; b++) lit.add(a * 8 + b); }); hlC.forEach(b => { for (let a = 0; a < 8; a++) lit.add(a * 8 + b); });
+      if (!lit.size) lit = null; multi = hlR.length + hlC.length >= 2; hintRGB = RGB[piece.color];
+    };
+    if (d && g.hand[d.i]) {
+      pose = this.dragPose(d);
+      spot = pose.home ? null : this.snap(d.i, pose.fr, pose.fc);
+      if (spot) lines(g.hand[d.i], spot.r, spot.c);
+    } else if (hp) { lines(hp, hn.r, hn.c); fromHint = true; }
+    // the hint's preview breathes slower than a live drag so the two never read the same
+    const pulse = fromHint ? .5 + .5 * Math.sin(t * 4.5) : .5 + .5 * Math.sin(t * 10);
     for (let idx = 0; idx < 64; idx++) {
       const v = g.board[idx]; if (!v) continue;
       const r = idx >> 3, c = idx & 7;
@@ -380,8 +385,10 @@ class BoardView {
       ctx.fillStyle = `rgba(${T.ink},${.06 + .14 * pulse})`;
       for (const i of lit) { const r = i >> 3, c = i & 7; rr(ctx, BX + c * CELL + 3, BY + r * CELL + 3, CELL - 6, CELL - 6, 11); ctx.fill(); }
       ctx.lineWidth = 2.5; ctx.strokeStyle = multi ? rgba(rainbow(0, 4, t)) : rgba(mixc(hintRGB, [255, 255, 255], .45));
+      if (fromHint) { ctx.setLineDash([10, 7]); ctx.lineDashOffset = -t * 22; ctx.globalAlpha = .55 + .45 * pulse; }
       hlR.forEach(a => { rr(ctx, BX - 2, BY + a * CELL - 2, BW + 4, CELL + 4, 12); ctx.stroke(); });
       hlC.forEach(b => { rr(ctx, BX + b * CELL - 2, BY - 2, CELL + 4, BW + 4, 12); ctx.stroke(); });
+      ctx.setLineDash([]); ctx.globalAlpha = 1;
     }
     if (spot) {
       const piece = g.hand[d.i];
@@ -400,7 +407,6 @@ class BoardView {
       }
     }
     // hint: a dashed, breathing outline of where the AI would put the piece
-    const hn = this.hint, hp = hn && g.hand[hn.i];
     if (hp && !(d && d.i === hn.i)) {
       const a = .5 + .5 * Math.sin(t * 4.5);
       ctx.fillStyle = `rgba(${T.ink},${.07 + .07 * a})`; ctx.strokeStyle = `rgba(${T.ink},${.4 + .35 * a})`;
@@ -481,7 +487,22 @@ function setLevel(v) {
   try { localStorage.setItem('bp_level', v); } catch (e) { /* storage blocked: level lasts this visit */ }
   $$('[data-level]').forEach(b => { const on = b.dataset.level === v; b.classList.toggle('on', on); b.setAttribute('aria-pressed', on); });
   $$('.lvl-hint').forEach(h => h.textContent = LEVEL_HINTS[v]);
+  placePills();
 }
+// one pill per picker glides to the selected option instead of the colour jumping
+function placePills() {
+  $$('.lvl').forEach(l => {
+    const on = $('button.on', l); if (!on || !l.offsetWidth) return;
+    let pill = $('.lvl-pill', l), fresh = !pill;
+    if (fresh) { pill = document.createElement('i'); pill.className = 'lvl-pill'; pill.setAttribute('aria-hidden', 'true'); l.prepend(pill); }
+    pill.classList.toggle('still', fresh);
+    pill.style.setProperty('--x', on.offsetLeft + 'px'); pill.style.setProperty('--w', on.offsetWidth + 'px');
+    l.classList.add('has-pill');
+    if (fresh) requestAnimationFrame(() => requestAnimationFrame(() => pill.classList.remove('still')));
+  });
+}
+addEventListener('resize', placePills);
+if (document.fonts && document.fonts.ready) document.fonts.ready.then(placePills);
 const randomSeed = () => Math.floor(Math.random() * 1e6);
 const pad6 = n => String(n).padStart(6, '0');
 const STAT_KEY = 'bp_stats';
@@ -646,7 +667,7 @@ function newGames(seed) {
   M.you.locked = true;
   M.speed = 3; $$('#spec .sp-speed button').forEach(b => b.classList.toggle('on', b.dataset.s === '3'));
   M.ctl = { phase: 'think', pending: false, hold: 0, wait: 0, res: null, mv: null };
-  M.tools = { ...TOOL_LIMITS, hint: M.mode === 'vs' ? HINTS_VS[level] : TOOL_LIMITS.hint, busy: false };
+  M.tools = { ...TOOL_LIMITS, hint: M.mode === 'vs' ? HINTS_VS[level] : TOOL_LIMITS.hint, busy: false, coolUntil: 0 };
   M.hintMax = M.tools.hint; M.stuck = false; M.gaveUp = false; M.you.rescue = false;
   $('#seedChip').textContent = '#' + pad6(seed) + (M.mode === 'vs' && QSCORE !== null && seed === QSEED ? ' · beat ' + QSCORE.toLocaleString() : '');
   $('#modeChip').textContent = M.mode === 'vs' ? 'vs AI · ' + LEVEL_NAMES[level] : 'Solo';
@@ -702,10 +723,12 @@ function aiStep(dt) {
 const TOOL_LIMITS = { hint: 3, undo: 1, reroll: 1 };
 // hints are a beginner handicap: generous on Easy, fewer on Normal, none on Hard
 const HINTS_VS = { easy: 3, normal: 2, hard: 0 };
+const HINT_COOLDOWN = 30000;
+const hintWait = () => M.tools ? Math.max(0, M.tools.coolUntil - performance.now()) : 0;
 function toolOK(k) {
   const v = M.you, t = M.tools;
   if (!v || !t || M.ended || v.locked || M.watchPrompt || M.spectating) return false;
-  if (k === 'hint') return t.hint > 0 && !t.busy && !v.game.over && !v.hint;
+  if (k === 'hint') return t.hint > 0 && !t.busy && !v.game.over && !v.hint && hintWait() <= 0;
   if (k === 'undo') return t.undo > 0 && !!v.undoSnap;
   if (k === 'reroll') return t.reroll > 0 && v.game.hand.some(Boolean);
   if (k === 'end') return M.stuck;
@@ -730,7 +753,7 @@ async function askHint() {
     const res = await Helper.hint(v.game);
     if (tok !== M.token || ver !== v.ver || v.game.over) return;          // the board moved on: this hint is stale
     if (res.none || !v.game.canPlace(res.i, res.r, res.c)) { toast('The AI sees no good move here.'); return; }
-    v.hint = { i: res.i, r: res.r, c: res.c }; M.tools.hint--; Sfx.play('hint');
+    v.hint = { i: res.i, r: res.r, c: res.c }; M.tools.hint--; M.tools.coolUntil = performance.now() + HINT_COOLDOWN; Sfx.play('hint');
   } catch (e) {
     console.warn('Hint failed.', e); if (tok === M.token) toast('Hints are unavailable right now.');
   } finally {
@@ -741,15 +764,23 @@ async function askHint() {
 function renderTools() {
   const d = M.dock, t = M.tools; if (!d || !t) return;
   const on = k => toolOK(k);
-  const key = [t.hint, t.undo, t.reroll, t.busy, M.stuck, on('hint'), on('undo'), on('reroll'), !!M.you.hint].join();
+  const wait = Math.ceil(hintWait() / 1000), cooling = wait > 0 && t.hint > 0;
+  const key = [t.hint, t.undo, t.reroll, t.busy, M.stuck, on('hint'), on('undo'), on('reroll'), !!M.you.hint, cooling && wait].join();
   if (key === d.key) return; d.key = key;
+  // the cooldown bar drains on the compositor; restart it only when a new cooldown begins
+  if (cooling && !d.btn.hint.classList.contains('cool')) {
+    d.btn.hint.style.setProperty('--cd', (hintWait() / 1000).toFixed(2) + 's');
+    d.btn.hint.classList.remove('cool'); void d.btn.hint.offsetWidth;
+  }
+  d.btn.hint.classList.toggle('cool', cooling && !M.you.hint);
   for (const k of ['hint', 'undo', 'reroll']) {
     d.btn[k].disabled = !on(k); d.n[k].textContent = t[k];
     d.btn[k].classList.toggle('spent', t[k] <= 0);
     d.btn[k].classList.toggle('glow', M.stuck && on(k));
   }
   d.btn.hint.classList.toggle('busy', t.busy); d.btn.hint.classList.toggle('active', !!M.you.hint);
-  $('.t-lab', d.btn.hint).textContent = t.busy ? 'Dreaming' : M.you.hint ? 'Shown' : 'Hint';
+  $('.t-lab', d.btn.hint).textContent = t.busy ? 'Dreaming' : M.you.hint ? 'Shown' : cooling ? `Wait ${wait}s` : 'Hint';
+  d.btn.hint.title = cooling ? `Next hint in ${wait} seconds` : "Hint (H): show the AI's best next move";
   d.root.classList.toggle('stuck', M.stuck); d.root.classList.toggle('no-hint', !M.hintMax);
 }
 function checkEnd() {
@@ -872,6 +903,7 @@ async function enterGame(mode, x, y) {
   let seed = QSEED !== null && mode === 'vs' ? QSEED : randomSeed();
   await irisIn(x, y);
   savedScroll = scrollY; M.mode = mode;
+  if (!pick.hidden) { closePick(true); if (pickPushed) { pickPushed = false; history.replaceState(null, ''); } }
   $('#landing').style.display = 'none'; document.body.classList.add('in-game');
   $('#game').hidden = false; buildArena(mode); newGames(seed);
   if (!M.raf) { M.last = performance.now(); M.raf = requestAnimationFrame(frame); }
@@ -898,7 +930,49 @@ const QSEED = QP.has('seed') && /^\d+$/.test(QP.get('seed')) ? parseInt(QP.get('
 const qnum = k => QP.has(k) && /^\d{1,7}$/.test(QP.get(k)) ? parseInt(QP.get(k), 10) : null;
 const QSCORE = qnum('s'), QAI = qnum('a');
 
-$$('.mode').forEach(b => b.addEventListener('click', e => { const r = b.getBoundingClientRect(); enterGame(b.dataset.mode, e.clientX || r.left + r.width / 2, e.clientY || r.top + r.height / 2); }));
+$$('.mode').forEach(b => b.addEventListener('click', e => {
+  if (b.dataset.mode === 'friends') { toast('Friend matches are coming soon.'); return; }
+  const r = b.getBoundingClientRect(); enterGame(b.dataset.mode, e.clientX || r.left + r.width / 2, e.clientY || r.top + r.height / 2);
+}));
+
+/* ---------- play overlay: sweeps in over the page instead of scrolling to the modes ---------- */
+const pick = $('#pick');
+let pickTimer = 0, pickPushed = false;
+const pickOpen = () => !pick.hidden && pick.classList.contains('on');
+function openPick() {
+  if (pickOpen() || M.busy) return;
+  clearTimeout(pickTimer);
+  pick.hidden = false; void pick.offsetWidth; pick.classList.add('on'); placePills();
+  document.body.classList.add('pick-open'); dispatchEvent(new Event('pickchange'));
+  if (!history.state || !history.state.pick) { history.pushState({ pick: 1 }, ''); pickPushed = true; }
+  setTimeout(() => { if (pickOpen()) $('.pk-card.vs', pick).focus({ preventScroll: true }); }, reduce ? 0 : 500);
+  setTimeout(() => { if (pickOpen()) pick.classList.add('settled'); }, reduce ? 0 : 1400);   // drop the entrance delays so hover is instant
+}
+function closePick(instant) {
+  if (pick.hidden) return;
+  pick.classList.remove('on', 'settled'); pick.classList.add('off');
+  document.body.classList.remove('pick-open'); dispatchEvent(new Event('pickchange'));
+  clearTimeout(pickTimer);
+  pickTimer = setTimeout(() => { pick.hidden = true; pick.classList.remove('off'); }, instant || reduce ? 0 : 700);
+}
+// leave through history so the phone's back button and Esc behave the same way
+function dismissPick() { if (pickPushed) { pickPushed = false; history.back(); } else closePick(); }
+addEventListener('popstate', () => { pickPushed = false; if (!pick.hidden) closePick(); });
+$('.pk-x', pick).addEventListener('click', dismissPick);
+if (!coarse && !reduce) $$('.pk-card', pick).forEach(c => {
+  c.addEventListener('pointermove', e => {
+    const r = c.getBoundingClientRect(), x = (e.clientX - r.left) / r.width - .5, y = (e.clientY - r.top) / r.height - .5;
+    c.classList.add('tilting');
+    c.style.setProperty('--ry', (x * 9).toFixed(2) + 'deg'); c.style.setProperty('--rx', (-y * 9).toFixed(2) + 'deg');
+  });
+  c.addEventListener('pointerleave', () => {
+    c.classList.remove('tilting'); c.style.setProperty('--rx', '0deg'); c.style.setProperty('--ry', '0deg');
+  });
+});
+$$('a[href="#play"]').forEach(a => a.addEventListener('click', e => {
+  if (QSEED !== null) return;                       // a challenge link goes straight into its match
+  e.preventDefault(); openPick();
+}));
 $('#btnBack').addEventListener('click', exitGame);
 $('#rMenu').addEventListener('click', exitGame);
 $('#rRematch').addEventListener('click', () => rematch(M.seed));
@@ -1171,6 +1245,7 @@ addEventListener('keydown', e => {
     if (t && (!e.ctrlKey || t === 'undo')) { e.preventDefault(); useTool(t); return; }
   }
   if (e.key !== 'Escape') return;
+  if (!pick.hidden) { e.preventDefault(); dismissPick(); return; }
   const share = $('#share');
   if (share && !share.hidden) {
     e.preventDefault();
@@ -1359,7 +1434,7 @@ void main(){
   addEventListener('pointerup', () => L.press = 0);
 
   function loop(ts) {
-    if (!visible) { raf = 0; return; } raf = requestAnimationFrame(loop);
+    if (!visible || document.body.classList.contains('pick-open')) { raf = 0; return; } raf = requestAnimationFrame(loop);
     const dt = Math.min(.033, (ts - last) / 1000 || .016); last = ts; const t = ts / 1000;
     if (introT < 1) { introT = clamp((ts - introStart) / 1700, 0, 1); drawScene(introT); upload(); }
     if (!g) return;
@@ -1384,6 +1459,7 @@ void main(){
   if ('IntersectionObserver' in window) new IntersectionObserver(es => { visible = es[0].isIntersecting && !document.body.classList.contains('in-game'); if (visible) start(); }).observe(pin);
   addEventListener('resize', size);
   addEventListener('themechange', () => { drawScene(introT); upload(); });
+  addEventListener('pickchange', start);
   size();
   const go = () => { introStart = performance.now(); if (reduce) { introT = 1; } drawScene(introT); upload(); start(); };
   (document.fonts && document.fonts.load ? document.fonts.load('800 80px Inter').catch(() => {}) : Promise.resolve()).then(() => { fontsOk = true; size(); window.__heroGo = go; });

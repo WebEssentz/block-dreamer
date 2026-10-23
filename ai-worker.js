@@ -1,5 +1,5 @@
 'use strict';
-importScripts('engine.js');
+importScripts('engine.js' + self.location.search);   // same build as the page that started us
 
 const ORT_VER = '1.20.1';
 const ORT_BASE = 'https://cdn.jsdelivr.net/npm/onnxruntime-web@' + ORT_VER + '/dist/';
