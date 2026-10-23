@@ -209,6 +209,13 @@
           <span class="go">Play <i>→</i></span>
         </button>
       </div>
+      <div class="lvl-row rv" data-d="160">
+        <small>AI level</small>
+        <div class="lvl glass" role="group" aria-label="AI level">
+          <button type="button" data-level="easy">Easy</button><button type="button" data-level="normal">Normal</button><button type="button" data-level="hard">Hard</button>
+        </div>
+        <span class="lvl-hint"></span>
+      </div>
     </section>
 
     <section class="record" id="record" hidden>
@@ -280,6 +287,18 @@
     <div class="arena" id="arena"></div>
     <div class="countdown" id="countdown" aria-live="assertive"></div>
     <div class="g-note" id="gNote"></div>
+
+    <div class="watch-prompt" id="watchPrompt" hidden>
+      <div class="watch-card glass" role="dialog" aria-modal="true" aria-labelledby="watchTitle" aria-describedby="watchDescription">
+        <span class="eyebrow">Your board is full</span>
+        <h2 id="watchTitle">Watch the AI finish?</h2>
+        <p id="watchDescription">Your score is <b id="watchYourScore">0</b>. AI score: <b id="watchAiScore">0</b>. <span id="watchAiStatus">The AI still has moves.</span></p>
+        <div class="watch-actions">
+          <button class="btn primary" id="watchAi" type="button">Watch AI finish</button>
+          <button class="btn glass" id="endAfterElimination" type="button">End match now</button>
+        </div>
+      </div>
+    </div>
 
     <div class="result" id="result" hidden>
       <div class="r-card glass">

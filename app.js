@@ -37,6 +37,9 @@ const Sfx = {
       case 'over': this.notes([67, 64, 60, 55], .22, .45, .2, 'triangle', m, .3); break;
       case 'win': this.notes([72, 76, 79, 84, 88], .12, .5, .2, 'triangle', m); break;
       case 'lose': this.notes([64, 60, 57, 52], .2, .5, .18, 'triangle', m); break;
+      case 'hint': this.notes([76, 83, 88], .07, .35, .07, 'sine', m); break;
+      case 'undo': this.tone(700, .14, .12, 'sine', 300, 0, m); break;
+      case 'reroll': for (let i = 0; i < 5; i++) this.tone(300 + Math.random() * 500, .04, .08, 'square', null, i * .045, m); break;
       case 'boardclear': this.notes([60, 64, 67, 72, 76, 79, 84, 88, 91, 96], .07, .6, .16, 'triangle', m, .25); break;
     }
   },
@@ -56,7 +59,8 @@ const Sfx = {
 /* =========================================================
    AI CLIENT (web worker)
 ========================================================= */
-const AI = {
+const stateOf = game => ({ board: game.board.map(v => v ? 1 : 0), hand: game.hand.map(p => p ? p.sid : -1), combo: game.combo, miss: game.miss });
+const makeAI = () => ({
   w: null, ready: false, err: null, id: 0, pend: new Map(), waiters: [],
   init() {
     if (this.w) return;
@@ -72,12 +76,17 @@ const AI = {
     this.w.postMessage({ type: 'init', preset: (coarse || (navigator.hardwareConcurrency || 4) <= 4) ? 'fast' : 'smart' });
   },
   whenReady() { return this.ready ? Promise.resolve(true) : this.err ? Promise.resolve(false) : new Promise(r => this.waiters.push(r)); },
-  reset(seed) { this.w.postMessage({ type: 'reset', seed }); },
-  move(game) {
-    const state = { board: game.board.map(v => v ? 1 : 0), hand: game.hand.map(p => p ? p.sid : -1), combo: game.combo, miss: game.miss };
-    return new Promise((resolve, reject) => { const id = ++this.id; this.pend.set(id, { resolve, reject }); this.w.postMessage({ type: 'move', id, state }); });
+  reset(seed, level) { this.w.postMessage({ type: 'reset', seed, level }); },
+  ask(type, game) {
+    const state = stateOf(game);
+    return new Promise((resolve, reject) => { const id = ++this.id; this.pend.set(id, { resolve, reject }); this.w.postMessage({ type, id, state }); });
   },
-};
+  move(game) { return this.ask('move', game); },
+  hint(game) { return this.ask('hint', game); },
+});
+// the opponent, and a separate brain for the player's hints so a hint can
+// never disturb (or wait behind) the opponent's own plan
+const AI = makeAI(), Helper = makeAI();
 
 /* =========================================================
    RENDERING
@@ -121,13 +130,28 @@ function rr(ctx, x, y, w, h, r) {
   ctx.moveTo(x + r, y); ctx.arcTo(x + w, y, x + w, y + h, r); ctx.arcTo(x + w, y + h, x, y + h, r);
   ctx.arcTo(x, y + h, x, y, r); ctx.arcTo(x, y, x + w, y, r); ctx.closePath();
 }
-function drawBlock(ctx, x, y, s, col, alpha = 1, scale = 1) {
-  const inset = Math.max(1.5, s * .05), size = (s - inset * 2) * scale, px = x + s / 2 - size / 2, py = y + s / 2 - size / 2;
-  ctx.globalAlpha = alpha;
+function paintBlock(ctx, px, py, size, col) {
   const g = ctx.createLinearGradient(px, py, px, py + size);
   g.addColorStop(0, rgba(mixc(col, [255, 255, 255], .3))); g.addColorStop(1, rgba(mixc(col, [0, 0, 0], .16)));
   rr(ctx, px, py, size, size, size * .24); ctx.fillStyle = g; ctx.fill();
   rr(ctx, px + size * .14, py + size * .09, size * .72, size * .13, size * .06); ctx.fillStyle = 'rgba(255,255,255,.28)'; ctx.fill();
+}
+// gradients + paths per block per frame are the main mobile cost, so blocks are
+// pre-rendered once per (colour, device size) and blitted.
+const SPR = new Map();
+function blockSprite(col, dpx) {
+  const key = ((col[0] >> 3) << 10 | (col[1] >> 3) << 5 | (col[2] >> 3)) + '|' + dpx;
+  let c = SPR.get(key); if (c) return c;
+  if (SPR.size > 700) SPR.clear();
+  c = document.createElement('canvas'); c.width = c.height = dpx;
+  paintBlock(c.getContext('2d'), 0, 0, dpx, col);
+  SPR.set(key, c); return c;
+}
+function drawBlock(ctx, x, y, s, col, alpha = 1, scale = 1) {
+  const inset = Math.max(1.5, s * .05), base = s - inset * 2, size = base * scale, px = x + s / 2 - size / 2, py = y + s / 2 - size / 2;
+  ctx.globalAlpha = alpha;
+  if (ctx._k) ctx.drawImage(blockSprite(col, Math.max(2, Math.round(base * ctx._k))), px, py, size, size);
+  else paintBlock(ctx, px, py, size, col);
   ctx.globalAlpha = 1;
 }
 const cellCenter = (r, c) => [BX + c * CELL + CELL / 2, BY + r * CELL + CELL / 2];
@@ -157,7 +181,11 @@ class Effects {
     this.shake = Math.max(this.shake, Math.min(14, 3 + 3 * n));
     if (info.boardClear) { this.text('BOARD CLEAR', CW / 2, BY + BW / 2, T.pop, 44, 1.8); this.flash = 1; this.shake = 18; }
   }
+  active() {
+    return this.particles.length || this.fading.length || this.popups.length || this.shake > 0 || this.flash > 0 || this.shown !== this._score || Object.keys(this.pops).length;
+  }
   update(dt, score) {
+    this._score = score;
     for (const p of this.particles) { if (p.wait > 0) { p.wait -= dt; continue; } p.vy += 800 * dt; p.x += p.vx * dt; p.y += p.vy * dt; p.life -= dt; }
     this.particles = this.particles.filter(p => p.life > 0);
     for (const f of this.fading) f.age += dt;
@@ -195,136 +223,223 @@ class Effects {
   }
 }
 
+const EMPTY = [];
+const DROP_SNAP = 1.3;                     // how far (in cells) a drop may be nudged to the nearest legal spot
 class BoardView {
   constructor(canvas, { interactive = false, tray = true } = {}) {
     this.cv = canvas; this.ctx = canvas.getContext('2d'); this.interactive = interactive; this.tray = tray;
     this.H = tray ? FULL_H : MINI_H; this.fx = new Effects();
-    this.drag = null; this.aiMove = null; this.ghost = []; this.dim = [false, false, false];
+    this.drag = null; this.back = null; this.aiMove = null; this.ghost = EMPTY; this.dim = [false, false, false];
     this.game = null; this.locked = true; this.k = 1; this.onInfo = null; this.onBad = null; this.onPick = null;
+    this.dirty = true; this.was = true; this.bg = null; this.rect = null;
+    this.hint = null; this.undoSnap = null; this.ver = 0;
     canvas.style.aspectRatio = `${CW} / ${this.H}`;
     if (interactive) this.bind();
     this.ro = new ResizeObserver(() => this.resize()); this.ro.observe(canvas);
+    this.onTheme = () => { this.bg = null; this.dirty = true; }; addEventListener('themechange', this.onTheme);
   }
+  destroy() { this.ro.disconnect(); removeEventListener('themechange', this.onTheme); }
   resize() {
     const w = this.cv.clientWidth; if (!w) return;
     const d = Math.min(devicePixelRatio || 1, 2), pw = Math.round(w * d);
-    if (this.cv.width !== pw) { this.cv.width = pw; this.cv.height = Math.round(pw * this.H / CW); }
-    this.k = this.cv.width / CW;
+    if (this.cv.width !== pw) { this.cv.width = pw; this.cv.height = Math.round(pw * this.H / CW); this.bg = null; }
+    this.k = this.cv.width / CW; this.ctx._k = this.k; this.dirty = true;
   }
-  setGame(g) { this.game = g; this.fx.reset(); this.drag = null; this.aiMove = null; this.ghost = []; this.refreshDim(); }
-  refreshDim() { const g = this.game; this.dim = g.hand.map(p => p ? !Engine.fitsAnywhere(g.board, p.cells) : false); }
-  commit(i, r, c) { const info = this.game.place(i, r, c); this.fx.onPlace(info); this.refreshDim(); return info; }
-  lift(d) { return d.touch ? 84 : 30; }
-  anchorOf(cells, x, y, lift) {
-    const [h, w] = pieceSize(cells);
-    const px = clamp(x - w * CELL / 2, BX, BX + BW - w * CELL);
-    const py = clamp(y - h * CELL / 2 - lift, BY, BY + BW - h * CELL);
-    return { r: Math.round((py - BY) / CELL), c: Math.round((px - BX) / CELL), px, py };
+  setGame(g) { this.game = g; this.fx.reset(); this.drag = null; this.back = null; this.aiMove = null; this.ghost = EMPTY; this.hint = null; this.undoSnap = null; this.ver++; this.refreshDim(); }
+  refreshDim() { const g = this.game; this.dim = g.hand.map(p => p ? !Engine.fitsAnywhere(g.board, p.cells) : false); this.dirty = true; }
+  commit(i, r, c) {
+    if (this.interactive) this.undoSnap = this.game.snapshot();
+    const info = this.game.place(i, r, c); this.fx.onPlace(info); this.hint = null; this.ver++; this.refreshDim(); return info;
   }
-  toLogical(e) { const r = this.cv.getBoundingClientRect(); return { x: (e.clientX - r.left) * CW / r.width, y: (e.clientY - r.top) * this.H / r.height }; }
+  // player-only rescues; each one invalidates any hint in flight
+  undo() {
+    if (!this.undoSnap) return false;
+    this.game.restore(this.undoSnap); this.undoSnap = null; this.drag = null; this.back = null; this.hint = null; this.ver++; this.refreshDim();
+    return true;
+  }
+  reroll() {
+    this.undoSnap = this.game.snapshot(); this.game.reroll(); this.drag = null; this.back = null; this.hint = null; this.ver++;
+    this.dealt = 0; this.refreshDim();
+  }
+  lift(d) { return d.touch ? 84 : 26; }
+  // where the dragged piece is drawn (s = current cell size) and where it would land
+  dragPose(d) {
+    const p = this.game.hand[d.i], [h, w] = pieceSize(p.cells), k = ease(d.k), s = TRAY_CELL + (CELL - TRAY_CELL) * k;
+    const cx = d.x, cy = d.y - this.lift(d) * k;
+    const px = clamp(cx - w * s / 2, BX, BX + BW - w * s), py = clamp(cy - h * s / 2, BY - CELL, BY + BW + CELL);
+    const fc = (clamp(cx - w * CELL / 2, BX, BX + BW - w * CELL) - BX) / CELL;
+    const fr = (clamp(cy - h * CELL / 2, BY - CELL * .6, BY + BW - h * CELL + CELL * .6) - BY) / CELL;
+    return { s, px, py, fr, fc, home: cy > BY + BW + CELL * .35 };
+  }
+  // nearest legal anchor to the piece's floating position, within DROP_SNAP cells
+  snap(i, fr, fc) {
+    const g = this.game; let best = null, bd = DROP_SNAP * DROP_SNAP;
+    for (let r = Math.floor(fr - DROP_SNAP); r <= Math.ceil(fr + DROP_SNAP); r++)
+      for (let c = Math.floor(fc - DROP_SNAP); c <= Math.ceil(fc + DROP_SNAP); c++) {
+        const dd = (r - fr) * (r - fr) + (c - fc) * (c - fc);
+        if (dd <= bd && g.canPlace(i, r, c)) { bd = dd; best = { r, c }; }
+      }
+    return best;
+  }
+  toLogical(e) { const r = this.rect; return { x: (e.clientX - r.left) * CW / r.width, y: (e.clientY - r.top) * this.H / r.height }; }
+  pickSlot(x) {
+    const hand = this.game.hand, sw = BW / 3, exact = clamp(Math.floor((x - BX) / sw), 0, 2);
+    if (hand[exact]) return exact;
+    let best = -1, bd = Infinity;
+    for (let i = 0; i < 3; i++) if (hand[i]) { const dd = Math.abs(BX + sw * (i + .5) - x); if (dd < bd) { bd = dd; best = i; } }
+    return bd < sw * 1.1 ? best : -1;
+  }
   bind() {
     const cv = this.cv;
+    const end = (e, drop) => {
+      const d = this.drag; if (!d || (e && e.pointerId !== d.id)) return;
+      if (e) { const p = this.toLogical(e); d.x = p.x; d.y = p.y; }
+      this.drag = null; this.dirty = true;
+      if (e && cv.hasPointerCapture(e.pointerId)) cv.releasePointerCapture(e.pointerId);
+      const piece = this.game.hand[d.i]; if (!piece) return;
+      const pose = this.dragPose(d);
+      const spot = drop && !this.locked && !pose.home ? this.snap(d.i, pose.fr, pose.fc) : null;
+      if (spot) { const info = this.commit(d.i, spot.r, spot.c); this.onInfo && this.onInfo(this, info); return; }
+      if (drop && !pose.home && !this.locked) this.onBad && this.onBad();
+      this.back = { i: d.i, x: pose.px, y: pose.py, s: pose.s, t: 0 };          // glide back to the tray
+    };
     cv.addEventListener('pointerdown', e => {
-      if (this.locked || !this.game || this.game.over) return;
-      const p = this.toLogical(e); if (p.y < TRAY_Y - 24) return;
-      const i = clamp(Math.floor((p.x - BX) / (BW / 3)), 0, 2); if (!this.game.hand[i]) return;
-      this.drag = { i, x: p.x, y: p.y, k: 0, touch: e.pointerType !== 'mouse' };
-      cv.setPointerCapture(e.pointerId); e.preventDefault(); this.onPick && this.onPick();
+      if (this.drag || this.locked || !this.game || this.game.over) return;
+      this.rect = cv.getBoundingClientRect();
+      const p = this.toLogical(e); if (p.y < BY + BW + 2) return;
+      const i = this.pickSlot(p.x); if (i < 0) return;
+      if (this.back && this.back.i === i) this.back = null;
+      this.drag = { i, id: e.pointerId, x: p.x, y: p.y, k: 0, touch: e.pointerType !== 'mouse' };
+      try { cv.setPointerCapture(e.pointerId); } catch (err) { /* pointer already released */ }
+      e.preventDefault(); this.dirty = true; this.onPick && this.onPick();
     });
-    cv.addEventListener('pointermove', e => { if (this.drag) { const p = this.toLogical(e); this.drag.x = p.x; this.drag.y = p.y; } });
-    cv.addEventListener('pointerup', e => {
-      const d = this.drag; if (!d) return; this.drag = null;
-      const p = this.toLogical(e), piece = this.game.hand[d.i]; if (!piece || this.locked) return;
-      if (p.x < 0 || p.x > CW || p.y < 0 || p.y > this.H) { this.onBad && this.onBad(); return; }
-      const a = this.anchorOf(piece.cells, p.x, p.y, this.lift(d));
-      if (this.game.canPlace(d.i, a.r, a.c)) { const info = this.commit(d.i, a.r, a.c); this.onInfo && this.onInfo(this, info); }
-      else this.onBad && this.onBad();
+    cv.addEventListener('pointermove', e => {
+      const d = this.drag; if (!d || e.pointerId !== d.id) return;
+      const p = this.toLogical(e); d.x = p.x; d.y = p.y; this.dirty = true;
     });
-    cv.addEventListener('pointercancel', () => { this.drag = null; });
+    cv.addEventListener('pointerup', e => end(e, true));
+    cv.addEventListener('pointercancel', e => end(e, false));
+    cv.addEventListener('lostpointercapture', e => { if (this.drag && e.pointerId === this.drag.id) end(null, true); });
+    cv.addEventListener('contextmenu', e => e.preventDefault());
   }
   trayOrigin(i, cells) {
     const [h, w] = pieceSize(cells), sw = BW / 3;
     return [BX + i * sw + (sw - w * TRAY_CELL) / 2, TRAY_Y + (SLOT_H - h * TRAY_CELL) / 2];
   }
-  update(dt) { if (this.drag) this.drag.k = Math.min(1, this.drag.k + dt / .12); }
-  drawFog(t) {
-    const ctx = this.ctx;
-    rr(ctx, BX - 8, BY - 8, BW + 16, BW + 16, 24);
-    ctx.fillStyle = `rgba(${T.ink},.05)`; ctx.fill();
+  update(dt) {
+    if (this.drag) this.drag.k = Math.min(1, this.drag.k + dt / .08);
+    if (this.dealt !== undefined && this.dealt < 1) { this.dealt = Math.min(1, this.dealt + dt / .35); this.dirty = true; }
+    if (this.back) { this.back.t += dt / .16; if (this.back.t >= 1 || !this.game.hand[this.back.i]) this.back = null; this.dirty = true; }
+  }
+  // static board frame + empty cells, cached at device resolution
+  boardBg() {
+    if (this.bg) return this.bg;
+    const c = document.createElement('canvas'); c.width = this.cv.width; c.height = Math.ceil((BY + BW + 16) * this.k);
+    const ctx = c.getContext('2d'); ctx.setTransform(this.k, 0, 0, this.k, 0, 0);
+    rr(ctx, BX - 8, BY - 8, BW + 16, BW + 16, 24); ctx.fillStyle = `rgba(${T.ink},.05)`; ctx.fill();
     ctx.strokeStyle = `rgba(${T.ink},.1)`; ctx.lineWidth = 1; ctx.stroke();
-    for (let r = 0; r < GRID; r++) for (let c = 0; c < GRID; c++) {
-      const a = .03 + .05 * (.5 + .5 * Math.sin(t * 2 - (r + c) * .6));
-      rr(ctx, BX + c * CELL + 3, BY + r * CELL + 3, CELL - 6, CELL - 6, 11);
-      ctx.fillStyle = `rgba(${T.ink},${a})`; ctx.fill();
-    }
-    ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
-    ctx.fillStyle = `rgba(${T.ink},.6)`; ctx.font = '700 24px Inter,system-ui,sans-serif';
-    ctx.fillText('Hidden until the end', CW / 2, BY + BW / 2);
+    ctx.fillStyle = `rgba(${T.ink},.06)`;
+    for (let r = 0; r < GRID; r++) for (let c2 = 0; c2 < GRID; c2++) { rr(ctx, BX + c2 * CELL + 3, BY + r * CELL + 3, CELL - 6, CELL - 6, 11); ctx.fill(); }
+    return (this.bg = c);
   }
   draw(t) {
     const ctx = this.ctx, g = this.game, fx = this.fx; if (!g || !this.k) return;
+    // skip frames where nothing on this board can have changed
+    const act = !!(this.drag || this.back || this.aiMove || this.hint || fx.active());
+    if (!act && !this.dirty && !this.was) return;
+    this.was = act; this.dirty = false;
     ctx.setTransform(this.k, 0, 0, this.k, 0, 0); ctx.clearRect(0, 0, CW, this.H);
-    if (this.fog && !g.over) { this.drawFog(t); return; }
     ctx.save();
     if (fx.shake > .1) ctx.translate((Math.random() - .5) * fx.shake, (Math.random() - .5) * fx.shake);
-    rr(ctx, BX - 8, BY - 8, BW + 16, BW + 16, 24); ctx.fillStyle = `rgba(${T.ink},.05)`; ctx.fill();
-    ctx.strokeStyle = `rgba(${T.ink},.1)`; ctx.lineWidth = 1; ctx.stroke();
+    const bg = this.boardBg(); ctx.drawImage(bg, 0, 0, CW, bg.height / this.k);
 
     // drag hint (rows/cols that would clear)
-    let lit = null, multi = false, hintRGB = null, anc = null, hlR = [], hlC = [];
+    let lit = null, multi = false, hintRGB = null, spot = null, pose = null, hlR = [], hlC = [];
     const d = this.drag;
     if (d && g.hand[d.i]) {
-      const piece = g.hand[d.i]; anc = this.anchorOf(piece.cells, d.x, d.y, this.lift(d));
-      if (g.canPlace(d.i, anc.r, anc.c)) {
-        const sim = g.board.slice(); for (const [dr, dc] of piece.cells) sim[(anc.r + dr) * 8 + anc.c + dc] = piece.color;
+      const piece = g.hand[d.i]; pose = this.dragPose(d);
+      spot = pose.home ? null : this.snap(d.i, pose.fr, pose.fc);
+      if (spot) {
+        const sim = g.board.slice(); for (const [dr, dc] of piece.cells) sim[(spot.r + dr) * 8 + spot.c + dc] = piece.color;
         for (let a = 0; a < 8; a++) {
           let rf = true, cf = true; for (let b = 0; b < 8; b++) { if (!sim[a * 8 + b]) rf = false; if (!sim[b * 8 + a]) cf = false; }
           if (rf) hlR.push(a); if (cf) hlC.push(a);
         }
         lit = new Set(); hlR.forEach(a => { for (let b = 0; b < 8; b++) lit.add(a * 8 + b); }); hlC.forEach(b => { for (let a = 0; a < 8; a++) lit.add(a * 8 + b); });
         if (!lit.size) lit = null; multi = hlR.length + hlC.length >= 2; hintRGB = RGB[piece.color];
-      } else anc.bad = true;
+      }
     }
     const pulse = .5 + .5 * Math.sin(t * 10);
-    for (let r = 0; r < GRID; r++) for (let c = 0; c < GRID; c++) {
-      const x = BX + c * CELL, y = BY + r * CELL, v = g.board[r * 8 + c], idx = r * 8 + c;
-      if (!v) { rr(ctx, x + 3, y + 3, CELL - 6, CELL - 6, 11); ctx.fillStyle = `rgba(${T.ink},.06)`; ctx.fill(); continue; }
+    for (let idx = 0; idx < 64; idx++) {
+      const v = g.board[idx]; if (!v) continue;
+      const r = idx >> 3, c = idx & 7;
       let col = RGB[v]; if (lit && lit.has(idx)) col = multi ? rainbow(r, c, t) : mixc(hintRGB, [255, 255, 255], .25);
-      const pk = fx.pops[idx]; drawBlock(ctx, x, y, CELL, col, 1, pk !== undefined ? 1 + .18 * Math.sin(Math.PI * pk / POP) : 1);
+      const pk = fx.pops[idx]; drawBlock(ctx, BX + c * CELL, BY + r * CELL, CELL, col, 1, pk !== undefined ? 1 + .18 * Math.sin(Math.PI * pk / POP) : 1);
     }
     if (lit) {
-      for (const i of lit) { const r = i >> 3, c = i & 7; rr(ctx, BX + c * CELL + 3, BY + r * CELL + 3, CELL - 6, CELL - 6, 11); ctx.fillStyle = `rgba(${T.ink},${.06 + .14 * pulse})`; ctx.fill(); }
+      ctx.fillStyle = `rgba(${T.ink},${.06 + .14 * pulse})`;
+      for (const i of lit) { const r = i >> 3, c = i & 7; rr(ctx, BX + c * CELL + 3, BY + r * CELL + 3, CELL - 6, CELL - 6, 11); ctx.fill(); }
       ctx.lineWidth = 2.5; ctx.strokeStyle = multi ? rgba(rainbow(0, 4, t)) : rgba(mixc(hintRGB, [255, 255, 255], .45));
       hlR.forEach(a => { rr(ctx, BX - 2, BY + a * CELL - 2, BW + 4, CELL + 4, 12); ctx.stroke(); });
       hlC.forEach(b => { rr(ctx, BX + b * CELL - 2, BY - 2, CELL + 4, BW + 4, 12); ctx.stroke(); });
     }
-    if (d && anc && !anc.bad) {
+    if (spot) {
       const piece = g.hand[d.i];
+      ctx.fillStyle = rgba(RGB[piece.color], .42);
       for (const [dr, dc] of piece.cells) {
-        const rr_ = anc.r + dr, cc = anc.c + dc; if (lit && lit.has(rr_ * 8 + cc)) continue;
-        rr(ctx, BX + cc * CELL + 3, BY + rr_ * CELL + 3, CELL - 6, CELL - 6, 11); ctx.fillStyle = rgba(RGB[piece.color], .42); ctx.fill();
+        const rr_ = spot.r + dr, cc = spot.c + dc; if (lit && lit.has(rr_ * 8 + cc)) continue;
+        rr(ctx, BX + cc * CELL + 3, BY + rr_ * CELL + 3, CELL - 6, CELL - 6, 11); ctx.fill();
       }
     }
     // AI "dream" ghosts
-    for (const st of this.ghost) {
-      const p = g.hand[st.i]; if (!p) continue;
-      for (const [dr, dc] of p.cells) { rr(ctx, BX + (st.c + dc) * CELL + 4, BY + (st.r + dr) * CELL + 4, CELL - 8, CELL - 8, 10); ctx.fillStyle = `rgba(${T.ink},.09)`; ctx.fill(); ctx.strokeStyle = `rgba(${T.ink},.22)`; ctx.lineWidth = 1; ctx.stroke(); }
+    if (this.ghost.length) {
+      ctx.fillStyle = `rgba(${T.ink},.09)`; ctx.strokeStyle = `rgba(${T.ink},.22)`; ctx.lineWidth = 1;
+      for (const st of this.ghost) {
+        const p = g.hand[st.i]; if (!p) continue;
+        for (const [dr, dc] of p.cells) { rr(ctx, BX + (st.c + dc) * CELL + 4, BY + (st.r + dr) * CELL + 4, CELL - 8, CELL - 8, 10); ctx.fill(); ctx.stroke(); }
+      }
+    }
+    // hint: a dashed, breathing outline of where the AI would put the piece
+    const hn = this.hint, hp = hn && g.hand[hn.i];
+    if (hp && !(d && d.i === hn.i)) {
+      const a = .5 + .5 * Math.sin(t * 4.5);
+      ctx.fillStyle = `rgba(${T.ink},${.07 + .07 * a})`; ctx.strokeStyle = `rgba(${T.ink},${.4 + .35 * a})`;
+      ctx.lineWidth = 2; ctx.setLineDash([7, 6]); ctx.lineDashOffset = -t * 18;
+      for (const [dr, dc] of hp.cells) { rr(ctx, BX + (hn.c + dc) * CELL + 4, BY + (hn.r + dr) * CELL + 4, CELL - 8, CELL - 8, 10); ctx.fill(); ctx.stroke(); }
+      ctx.setLineDash([]);
     }
     const am = this.aiMove;
     if (am && g.hand[am.i]) {
-      for (const [dr, dc] of g.hand[am.i].cells) { rr(ctx, BX + (am.c + dc) * CELL + 3, BY + (am.r + dr) * CELL + 3, CELL - 6, CELL - 6, 11); ctx.fillStyle = rgba(RGB[g.hand[am.i].color], .3 * ease(am.t)); ctx.fill(); }
+      ctx.fillStyle = rgba(RGB[g.hand[am.i].color], .3 * ease(am.t));
+      for (const [dr, dc] of g.hand[am.i].cells) { rr(ctx, BX + (am.c + dc) * CELL + 3, BY + (am.r + dr) * CELL + 3, CELL - 6, CELL - 6, 11); ctx.fill(); }
     }
     fx.draw(ctx, t);
     ctx.restore();
 
     // tray
+    const bk = this.back;
     if (this.tray) {
-      for (let i = 0; i < 3; i++) {
-        rr(ctx, BX + i * BW / 3 + 4, TRAY_Y, BW / 3 - 8, SLOT_H, 20); ctx.fillStyle = `rgba(${T.ink},.04)`; ctx.fill();
-        const p = g.hand[i]; if (!p || (d && d.i === i) || (am && am.i === i)) continue;
-        const [x0, y0] = this.trayOrigin(i, p.cells);
-        for (const [dr, dc] of p.cells) drawBlock(ctx, x0 + dc * TRAY_CELL, y0 + dr * TRAY_CELL, TRAY_CELL, RGB[p.color], this.dim[i] ? .3 : 1);
+      ctx.fillStyle = `rgba(${T.ink},.04)`;
+      for (let i = 0; i < 3; i++) { rr(ctx, BX + i * BW / 3 + 4, TRAY_Y, BW / 3 - 8, SLOT_H, 20); ctx.fill(); }
+      if (hp) {
+        const a = .5 + .5 * Math.sin(t * 4.5);
+        rr(ctx, BX + hn.i * BW / 3 + 4, TRAY_Y, BW / 3 - 8, SLOT_H, 20);
+        ctx.fillStyle = `rgba(${T.ink},${.05 + .05 * a})`; ctx.fill();
+        ctx.lineWidth = 2; ctx.strokeStyle = `rgba(${T.ink},${.35 + .35 * a})`; ctx.stroke();
+        ctx.fillStyle = `rgba(${T.ink},.04)`;
       }
+      const deal = this.dealt === undefined ? 1 : ease(this.dealt);
+      for (let i = 0; i < 3; i++) {
+        const p = g.hand[i]; if (!p || (d && d.i === i) || (am && am.i === i) || (bk && bk.i === i)) continue;
+        const [x0, y0] = this.trayOrigin(i, p.cells);
+        for (const [dr, dc] of p.cells) drawBlock(ctx, x0 + dc * TRAY_CELL, y0 + dr * TRAY_CELL, TRAY_CELL, RGB[p.color], (this.dim[i] ? .3 : 1) * deal, .4 + .6 * deal);
+      }
+    }
+    // piece gliding back to the tray after a missed drop
+    if (bk && g.hand[bk.i]) {
+      const p = g.hand[bk.i], k = ease(clamp(bk.t, 0, 1)), [x0, y0] = this.trayOrigin(bk.i, p.cells);
+      const s = bk.s + (TRAY_CELL - bk.s) * k, x = bk.x + (x0 - bk.x) * k, y = bk.y + (y0 - bk.y) * k;
+      for (const [dr, dc] of p.cells) drawBlock(ctx, x + dc * s, y + dr * s, s, RGB[p.color], this.dim[bk.i] ? .3 : 1);
     }
     // piece in flight (AI)
     if (am && g.hand[am.i]) {
@@ -338,18 +453,17 @@ class BoardView {
       }
     }
     // dragged piece
-    if (d && g.hand[d.i]) {
-      const p = g.hand[d.i], k = ease(d.k), s = TRAY_CELL + (CELL - TRAY_CELL) * k, [h, w] = pieceSize(p.cells);
-      const px = clamp(d.x - w * s / 2, BX, BX + BW - w * s);
-      const py = clamp(d.y - h * s / 2 - this.lift(d) * k, BY, BY + BW - h * s);
-      for (const [dr, dc] of p.cells) { rr(ctx, px + dc * s + 4, py + dr * s + 12, s - 8, s - 8, 12); ctx.fillStyle = 'rgba(0,0,0,.28)'; ctx.fill(); }
+    if (pose) {
+      const p = g.hand[d.i], { s, px, py } = pose;
+      ctx.fillStyle = 'rgba(0,0,0,.28)';
+      for (const [dr, dc] of p.cells) { rr(ctx, px + dc * s + 4, py + dr * s + 12, s - 8, s - 8, 12); ctx.fill(); }
       for (const [dr, dc] of p.cells) drawBlock(ctx, px + dc * s, py + dr * s, s, RGB[p.color], .97);
     }
     if (g.over) {
       ctx.fillStyle = `rgba(${T.bg},.7)`; rr(ctx, 0, 0, CW, this.H, 0); ctx.fill();
       ctx.textAlign = 'center'; ctx.textBaseline = 'middle'; ctx.fillStyle = T.fg;
       ctx.font = '800 38px Inter,system-ui,sans-serif'; ctx.fillText('No moves left', CW / 2, BY + BW / 2 - 10);
-      ctx.fillStyle = `rgba(${T.ink},.6)`; ctx.font = '600 18px Inter,system-ui,sans-serif'; ctx.fillText(g.score.toLocaleString() + ' pts', CW / 2, BY + BW / 2 + 28);
+      ctx.fillStyle = `rgba(${T.ink},.6)`; ctx.font = '600 18px Inter,system-ui,sans-serif'; ctx.fillText(this.rescue ? 'Undo or reroll to keep going' : g.score.toLocaleString() + ' pts', CW / 2, BY + BW / 2 + 28);
     }
   }
 }
@@ -357,7 +471,17 @@ class BoardView {
 /* =========================================================
    MATCH (solo / versus)
 ========================================================= */
-const M = { mode: 'solo', seed: 0, you: null, ai: null, running: false, ended: false, raf: 0, last: 0, token: 0, ctl: null, speed: 3 };
+const M = { mode: 'solo', seed: 0, you: null, ai: null, running: false, ended: false, raf: 0, last: 0, token: 0, ctl: null, speed: 3, spectating: false, watchPrompt: false };
+const LEVEL_NAMES = { easy: 'Easy', normal: 'Normal', hard: 'Hard' };
+const LEVEL_HINTS = { easy: 'Makes mistakes, and you get 3 hints.', normal: 'Plays on instinct, and you get 2 hints.', hard: 'Full dream search. No hints.' };
+let level = 'normal';
+try { const v = localStorage.getItem('bp_level'); if (LEVEL_NAMES[v]) level = v; } catch (e) { /* storage blocked: keep default */ }
+function setLevel(v) {
+  if (!LEVEL_NAMES[v]) return; level = v;
+  try { localStorage.setItem('bp_level', v); } catch (e) { /* storage blocked: level lasts this visit */ }
+  $$('[data-level]').forEach(b => { const on = b.dataset.level === v; b.classList.toggle('on', on); b.setAttribute('aria-pressed', on); });
+  $$('.lvl-hint').forEach(h => h.textContent = LEVEL_HINTS[v]);
+}
 const randomSeed = () => Math.floor(Math.random() * 1e6);
 const pad6 = n => String(n).padStart(6, '0');
 const STAT_KEY = 'bp_stats';
@@ -450,14 +574,29 @@ function renderRecord() {
 }
 renderRecord();
 
+const TOOL_SVG = {
+  hint: '<path d="M9.5 18h5M10.5 21h3"/><path d="M12 3a6 6 0 0 0-3.7 10.7c.8.6 1.2 1.4 1.2 2.3h5c0-.9.4-1.7 1.2-2.3A6 6 0 0 0 12 3z"/>',
+  undo: '<path d="M9 14L4 9l5-5"/><path d="M4 9h10.5a5.5 5.5 0 0 1 0 11H11"/>',
+  reroll: '<rect x="4" y="4" width="16" height="16" rx="4.5"/><circle cx="9" cy="9" r="1.3" fill="currentColor" stroke="none"/><circle cx="15" cy="9" r="1.3" fill="currentColor" stroke="none"/><circle cx="12" cy="12" r="1.3" fill="currentColor" stroke="none"/><circle cx="9" cy="15" r="1.3" fill="currentColor" stroke="none"/><circle cx="15" cy="15" r="1.3" fill="currentColor" stroke="none"/>'
+};
+const toolSvg = k => `<svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${TOOL_SVG[k]}</svg>`;
+const TOOLS_HTML = `<div class="tools glass" role="toolbar" aria-label="Player help">
+    <button class="tool t-hint" type="button" data-t="hint" title="Hint (H): show the AI's best next move">${toolSvg('hint')}<span class="t-lab">Hint</span><b class="t-n"></b></button>
+    <i class="t-sep" aria-hidden="true"></i>
+    <button class="tool" type="button" data-t="undo" title="Undo your last move (Z), once per game" aria-label="Undo">${toolSvg('undo')}<b class="t-n"></b></button>
+    <button class="tool" type="button" data-t="reroll" title="Reroll your pieces (R), once per game" aria-label="Reroll pieces">${toolSvg('reroll')}<b class="t-n"></b></button>
+    <button class="t-end" type="button" data-t="end">End game</button>
+  </div>`;
 function panelHTML(cls, who, extra = '') {
   return `<section class="panel ${cls}"><div class="p-head"><div><small>${who}${cls === 'you' ? ' <em class="best"></em>' : ''}</small><b class="score">0</b></div>
-    <div class="p-right"><div class="combo"><span class="cx">x0</span><span class="dots"><i></i><i></i><i></i></span></div>${extra}</div></div><canvas></canvas></section>`;
+    <div class="p-right"><div class="combo"><span class="cx">x0</span><span class="dots"><i></i><i></i><i></i></span></div>${extra}</div></div><canvas></canvas>${cls === 'you' ? TOOLS_HTML : ''}</section>`;
 }
 function buildArena(mode) {
   const arena = $('#arena'); const vs = mode === 'vs';
+  [M.you, M.ai].forEach(v => v && v.destroy());
   arena.className = 'arena enter ' + (vs ? 'vs' : 'solo');
   arena.innerHTML = panelHTML('you', 'You') + (vs ? `<div class="vs-mid"><span>VS</span><div class="lead"><i></i></div></div>` + panelHTML('ai', 'AI', '<span class="status"></span>') : '');
+  M.lead = vs ? $('.lead', arena) : null; M.leadV = '';
   const mini = vs && innerWidth <= 760;
   const mk = (sel, opts) => {
     const root = $(sel, arena), v = new BoardView($('canvas', root), opts);
@@ -468,7 +607,9 @@ function buildArena(mode) {
   M.you.hud.best = $('.best', $('.panel.you', arena));
   M.you.hud.bestVal = Stats.d.best; M.you.hud.bestTxt = '';
   M.ai = vs ? mk('.panel.ai', { interactive: false, tray: !mini }) : null;
-  if (M.ai) M.ai.fog = false;
+  const dock = $('.panel.you .tools', arena);
+  M.dock = { root: dock, btn: {}, n: {}, key: '' };
+  $$('[data-t]', dock).forEach(b => { M.dock.btn[b.dataset.t] = b; M.dock.n[b.dataset.t] = $('.t-n', b); b.addEventListener('click', () => useTool(b.dataset.t)); });
   M.you.onPick = () => Sfx.play('pick');
   M.you.onBad = () => Sfx.play('bad');
   M.you.onInfo = (v, info) => Sfx.onInfo(info);
@@ -488,7 +629,7 @@ function buildSpectate(vs) {
 }
 function updateSpectate() {
   const s = $('#spec'); if (!s) return;
-  const on = !!M.ai && M.running && !M.ended && M.you.game.over && !M.ai.game.over;
+  const on = !!M.ai && M.spectating && M.running && !M.ended && M.you.game.over && !M.ai.game.over;
   s.classList.toggle('show', on); $('#arena').classList.toggle('spectate', on);
   if (!on) return;
   const y = M.you.game.score, a = M.ai.game.score;
@@ -498,12 +639,17 @@ function updateSpectate() {
 }
 function newGames(seed) {
   M.seed = seed;
+  M.spectating = false; M.watchPrompt = false; $('#watchPrompt').hidden = true;
+  const spec = $('#spec'); if (spec) spec.classList.remove('show');
+  $('#arena').classList.remove('spectate');
   M.you.setGame(new Game(seed)); if (M.ai) M.ai.setGame(new Game(seed, { altSeed: aiSeedOf(seed) }));
   M.you.locked = true;
   M.speed = 3; $$('#spec .sp-speed button').forEach(b => b.classList.toggle('on', b.dataset.s === '3'));
   M.ctl = { phase: 'think', pending: false, hold: 0, wait: 0, res: null, mv: null };
+  M.tools = { ...TOOL_LIMITS, hint: M.mode === 'vs' ? HINTS_VS[level] : TOOL_LIMITS.hint, busy: false };
+  M.hintMax = M.tools.hint; M.stuck = false; M.gaveUp = false; M.you.rescue = false;
   $('#seedChip').textContent = '#' + pad6(seed) + (M.mode === 'vs' && QSCORE !== null && seed === QSEED ? ' · beat ' + QSCORE.toLocaleString() : '');
-  $('#modeChip').textContent = M.mode === 'vs' ? 'You vs AI' : 'Solo';
+  $('#modeChip').textContent = M.mode === 'vs' ? 'vs AI · ' + LEVEL_NAMES[level] : 'Solo';
 }
 function updateHUD(v) {
   const s = Math.round(v.fx.shown); if (v.hud.last !== s) { v.hud.last = s; v.hud.score.textContent = s.toLocaleString(); }
@@ -520,41 +666,116 @@ function updateHUD(v) {
     }
   }
 }
+// fixed-width, single-line status so its text never reflows the boards
+function setStatus(v, txt, think = false) {
+  const h = v.hud; if (h.st === txt) return;
+  h.st = txt; h.status.textContent = txt; h.status.classList.toggle('think', think);
+}
 function aiStep(dt) {
-  const v = M.ai; if (!v) return; const g = v.game, c = M.ctl, st = v.hud.status;
-  if (g.over) { st.textContent = 'Out of moves'; st.classList.remove('think'); v.aiMove = null; v.ghost = []; return; }
+  const v = M.ai; if (!v) return; const g = v.game, c = M.ctl;
+  if (g.over) { setStatus(v, 'Out of moves'); v.aiMove = null; if (v.ghost !== EMPTY) { v.ghost = EMPTY; v.dirty = true; } return; }
   const sp = M.you.game.over ? M.speed : 1;
   if (c.phase === 'think') {
-    st.textContent = 'Dreaming ahead'; st.classList.add('think');
+    setStatus(v, level === 'hard' ? 'Dreaming' : 'Thinking', true);
     if (!c.pending) {
       c.pending = true; const tok = M.token;
       AI.move(g).then(res => { if (tok !== M.token) return; c.pending = false; c.res = res; c.phase = 'hold'; c.hold = 0; })
         .catch(() => { if (tok !== M.token) return; c.pending = false; c.phase = 'dead'; toast('The AI crashed. Try reloading.'); });
     }
   } else if (c.phase === 'hold') {
-    st.classList.remove('think'); st.textContent = 'Planning move';
-    v.ghost = c.res.plan || []; c.hold += dt * sp;
+    setStatus(v, 'Planning');
+    const plan = c.res.plan && c.res.plan.length ? c.res.plan : EMPTY;
+    if (v.ghost !== plan) { v.ghost = plan; v.dirty = true; }
+    c.hold += dt * sp;
     if (c.hold >= .55) {
       if (c.res.none || !g.hand[c.res.i]) { c.phase = 'think'; return; }
       c.mv = { i: c.res.i, r: c.res.r, c: c.res.c, t: 0 }; v.aiMove = c.mv; c.phase = 'move'; Sfx.play('pick', .35);
     }
   } else if (c.phase === 'move') {
-    st.textContent = 'Placing'; c.mv.t += dt * sp / .45;
+    setStatus(v, 'Placing'); c.mv.t += dt * sp / .45;
     if (c.mv.t >= 1) {
       const info = v.commit(c.mv.i, c.mv.r, c.mv.c); v.aiMove = null; Sfx.onInfo(info, .35); c.phase = 'wait'; c.wait = 0;
     }
   } else if (c.phase === 'wait') { c.wait += dt * sp; if (c.wait >= .25) c.phase = 'think'; }
 }
+/* ---------- player help: hint, undo, reroll (the AI gets none of these) ---------- */
+const TOOL_LIMITS = { hint: 3, undo: 1, reroll: 1 };
+// hints are a beginner handicap: generous on Easy, fewer on Normal, none on Hard
+const HINTS_VS = { easy: 3, normal: 2, hard: 0 };
+function toolOK(k) {
+  const v = M.you, t = M.tools;
+  if (!v || !t || M.ended || v.locked || M.watchPrompt || M.spectating) return false;
+  if (k === 'hint') return t.hint > 0 && !t.busy && !v.game.over && !v.hint;
+  if (k === 'undo') return t.undo > 0 && !!v.undoSnap;
+  if (k === 'reroll') return t.reroll > 0 && v.game.hand.some(Boolean);
+  if (k === 'end') return M.stuck;
+  return false;
+}
+function useTool(k) {
+  if (!toolOK(k)) return;
+  Sfx.ensure();
+  const v = M.you;
+  if (k === 'hint') askHint();
+  else if (k === 'undo') { if (v.undo()) { M.tools.undo--; Sfx.play('undo'); } }
+  else if (k === 'reroll') { v.reroll(); M.tools.reroll--; Sfx.play('reroll'); }
+  else if (k === 'end') { M.gaveUp = true; }
+  renderTools();
+}
+async function askHint() {
+  const v = M.you, ver = v.ver, tok = M.token;
+  M.tools.busy = true; renderTools();
+  try {
+    Helper.init();
+    if (!(await Helper.whenReady())) throw new Error(Helper.err || 'helper failed to load');
+    const res = await Helper.hint(v.game);
+    if (tok !== M.token || ver !== v.ver || v.game.over) return;          // the board moved on: this hint is stale
+    if (res.none || !v.game.canPlace(res.i, res.r, res.c)) { toast('The AI sees no good move here.'); return; }
+    v.hint = { i: res.i, r: res.r, c: res.c }; M.tools.hint--; Sfx.play('hint');
+  } catch (e) {
+    console.warn('Hint failed.', e); if (tok === M.token) toast('Hints are unavailable right now.');
+  } finally {
+    if (tok === M.token) { M.tools.busy = false; renderTools(); }
+  }
+}
+// dock state is derived; only touch the DOM when something actually changed
+function renderTools() {
+  const d = M.dock, t = M.tools; if (!d || !t) return;
+  const on = k => toolOK(k);
+  const key = [t.hint, t.undo, t.reroll, t.busy, M.stuck, on('hint'), on('undo'), on('reroll'), !!M.you.hint].join();
+  if (key === d.key) return; d.key = key;
+  for (const k of ['hint', 'undo', 'reroll']) {
+    d.btn[k].disabled = !on(k); d.n[k].textContent = t[k];
+    d.btn[k].classList.toggle('spent', t[k] <= 0);
+    d.btn[k].classList.toggle('glow', M.stuck && on(k));
+  }
+  d.btn.hint.classList.toggle('busy', t.busy); d.btn.hint.classList.toggle('active', !!M.you.hint);
+  $('.t-lab', d.btn.hint).textContent = t.busy ? 'Dreaming' : M.you.hint ? 'Shown' : 'Hint';
+  d.root.classList.toggle('stuck', M.stuck); d.root.classList.toggle('no-hint', !M.hintMax);
+}
 function checkEnd() {
   if (M.ended) return;
   const y = M.you.game;
-  if (M.mode === 'solo') { if (y.over) finish('solo'); return; }
+  const stuck = y.over && !M.gaveUp && (toolOK('undo') || toolOK('reroll'));
+  if (stuck !== M.stuck) { M.stuck = stuck; M.you.rescue = stuck; M.you.dirty = true; renderTools(); }
+  const out = y.over && !stuck;
+  if (M.mode === 'solo') { if (out) finish('solo'); return; }
   const a = M.ai.game;
-  if (y.over && a.over) finish(y.score > a.score ? 'win' : y.score < a.score ? 'lose' : 'draw');
-  else if (a.over && y.score > a.score) finish('win');
+  if (a.over) {
+    if (out || y.score > a.score) finish(y.score > a.score ? 'win' : y.score < a.score ? 'lose' : 'draw');
+    return;
+  }
+  if (out && !M.spectating && !M.watchPrompt) {
+    M.running = false;
+    M.watchPrompt = true;
+    $('#watchPrompt').hidden = false;
+    $('#watchYourScore').textContent = y.score.toLocaleString();
+    $('#watchAiScore').textContent = a.score.toLocaleString();
+    $('#watchAiStatus').textContent = 'The AI still has moves.';
+    $('#watchAi').focus();
+  }
 }
 async function finish(kind) {
-  M.ended = true; M.running = false; M.you.locked = true; const tok = M.token;
+  M.ended = true; M.running = false; M.watchPrompt = false; $('#watchPrompt').hidden = true; M.you.locked = true; const tok = M.token;
   await sleep(1100); if (tok !== M.token) return;
   const y = M.you.game.score, a = M.ai ? M.ai.game.score : 0;
   const R = $('#result'); let title, kicker = 'Final', sub = '';
@@ -588,10 +809,13 @@ async function finish(kind) {
 function frame(ts) {
   M.raf = requestAnimationFrame(frame);
   const dt = Math.min(.05, (ts - M.last) / 1000 || .016); M.last = ts; const t = ts / 1000;
-  if (M.ai) M.ai.fog = false;
   for (const v of [M.you, M.ai]) if (v) { v.fx.update(dt, v.game.score); v.update(dt); v.draw(t); updateHUD(v); }
-  if (M.ai) { const a = M.ai.game.score, y = M.you.game.score; $('.lead').style.setProperty('--lead', (y + a ? y / (y + a) : .5).toFixed(3)); }
-  if (M.running) { aiStep(dt); checkEnd(); }
+  if (M.lead) {
+    const a = M.ai.game.score, y = M.you.game.score, lead = (y + a ? y / (y + a) : .5).toFixed(3);
+    if (lead !== M.leadV) { M.leadV = lead; M.lead.style.setProperty('--lead', lead); }
+  }
+  if (M.running) { checkEnd(); if (M.running) { aiStep(dt); checkEnd(); } }
+  renderTools();
   updateSpectate();
 }
 async function countdown(tok) {
@@ -611,12 +835,24 @@ async function begin() {                    // countdown, then go
     const ok = await AI.whenReady(); note.classList.remove('show');
     if (tok !== M.token) return;
     if (!ok) { toast('AI failed to load: ' + (AI.err || 'unknown') + '. Serve over http(s), not file://'); await sleep(600); if (tok === M.token) exitGame(); return; }
-    AI.reset(M.seed);
+    AI.reset(M.seed, level);
   }
   if (!(await countdown(tok))) return;
   M.you.locked = false; M.running = true;
 }
 function rematch(seed) { M.token++; newGames(seed); begin(); }
+function chooseSpectate(watch) {
+  M.watchPrompt = false;
+  $('#watchPrompt').hidden = true;
+  if (watch) {
+    M.spectating = true;
+    M.running = true;
+    updateSpectate();
+    return;
+  }
+  const you = M.you.game.score, ai = M.ai.game.score;
+  finish(you > ai ? 'win' : you < ai ? 'lose' : 'draw');
+}
 
 /* =========================================================
    TRANSITIONS
@@ -643,6 +879,7 @@ async function enterGame(mode, x, y) {
 }
 async function exitGame() {
   if (M.busy) return; M.busy = true; M.token++; M.running = false;
+  M.watchPrompt = false; M.spectating = false; $('#watchPrompt').hidden = true;
   const spec = $('#spec'); if (spec) spec.remove(); $('#arena').classList.remove('spectate');
   await irisIn(innerWidth / 2, innerHeight / 2);
   cancelAnimationFrame(M.raf); M.raf = 0; $('#game').hidden = true; $('#result').hidden = true; $('#countdown').textContent = '';
@@ -666,6 +903,10 @@ $('#btnBack').addEventListener('click', exitGame);
 $('#rMenu').addEventListener('click', exitGame);
 $('#rRematch').addEventListener('click', () => rematch(M.seed));
 $('#rNew').addEventListener('click', () => rematch(randomSeed()));
+$$('[data-level]').forEach(b => b.addEventListener('click', () => setLevel(b.dataset.level)));
+setLevel(level);
+$('#watchAi').addEventListener('click', () => chooseSpectate(true));
+$('#endAfterElimination').addEventListener('click', () => chooseSpectate(false));
 const SHARE_ICONS = {
   wa: '<path d="M3 21l1.6-4.8A8.5 8.5 0 1 1 8 19.5L3 21z"/><path d="M9 9.5c0 3 2.5 5.5 5.5 5.5l1-1.5-2-1-.8.8c-1-.4-1.8-1.2-2.2-2.2l.8-.8-1-2L9 9.5z"/>',
   x: '<path d="M4 4l16 16M20 4L4 20"/>',
@@ -925,6 +1166,10 @@ $('#btnSound').addEventListener('click', () => {
   Sfx.ensure(); Sfx.on = !Sfx.on; $('#icoOn').style.display = Sfx.on ? '' : 'none'; $('#icoOff').style.display = Sfx.on ? 'none' : '';
 });
 addEventListener('keydown', e => {
+  if (!$('#game').hidden && !e.metaKey && !e.altKey && !e.target.closest('input,textarea')) {
+    const k = e.key.toLowerCase(), t = k === 'h' ? 'hint' : k === 'z' ? 'undo' : k === 'r' ? 'reroll' : null;
+    if (t && (!e.ctrlKey || t === 'undo')) { e.preventDefault(); useTool(t); return; }
+  }
   if (e.key !== 'Escape') return;
   const share = $('#share');
   if (share && !share.hidden) {
@@ -968,7 +1213,7 @@ $$('.mini').forEach(m => {
   const r = Engine.mulberry32(+m.dataset.seed); let html = '';
   for (let i = 0; i < 64; i++) html += `<i class="${r() < .38 ? 'on' : ''}"></i>`; m.innerHTML = html;
 });
-document.addEventListener('pointermove', e => {
+if (!coarse) document.addEventListener('pointermove', e => {
   const c = e.target.closest && e.target.closest('.card,.mode'); if (!c) return; const r = c.getBoundingClientRect();
   c.style.setProperty('--mx', (e.clientX - r.left) + 'px'); c.style.setProperty('--my', (e.clientY - r.top) + 'px');
 });
@@ -985,15 +1230,28 @@ if (!coarse && !reduce) {
 // scroll-linked word highlight
 const mt = $('#manifestoText'); mt.innerHTML = mt.textContent.split(' ').map(w => `<span class="w">${w}</span>`).join(' ');
 const words = $$('.w', mt), heroPin = $('#heroPin'), nav = $('#nav'), heroBottom = $('.hero-bottom'), heroTop = $('.hero-top'), cue = $('.scroll-cue');
-let ticking = false;
+let ticking = false, lastP = -1;
+const wordOp = words.map(() => -1);
 function onScroll() {
   ticking = false; if (document.body.classList.contains('in-game')) return;
-  const y = scrollY, vh = innerHeight, p = clamp(y / (vh * .75), 0, 1);
-  if (!reduce) { heroPin.style.transform = `scale(${1 - .08 * p})`; heroPin.style.borderRadius = (p * 40) + 'px'; heroPin.style.opacity = 1 - .5 * p; }
-  heroBottom.style.opacity = 1 - clamp(p * 2.2, 0, 1); heroTop.style.opacity = 1 - clamp(p * 2.2, 0, 1); cue.style.opacity = 1 - clamp(p * 4, 0, 1);
+  const y = scrollY, vh = innerHeight, p = Math.round(clamp(y / (vh * .75), 0, 1) * 500) / 500;
+  // only touch styles when the value moved: every write costs a style recalc
+  if (p !== lastP) {
+    lastP = p;
+    if (!reduce) {
+      heroPin.style.transform = `scale(${1 - .08 * p})`; heroPin.style.opacity = 1 - .5 * p;
+      if (!coarse) heroPin.style.borderRadius = (p * 40) + 'px';
+    }
+    heroBottom.style.opacity = heroTop.style.opacity = 1 - clamp(p * 2.2, 0, 1); cue.style.opacity = 1 - clamp(p * 4, 0, 1);
+  }
   nav.classList.toggle('scrolled', y > 30);
-  const r = mt.getBoundingClientRect(), prog = clamp((vh * .85 - r.top) / (r.height + vh * .35), 0, 1) * words.length * 1.15;
-  words.forEach((w, i) => w.style.opacity = clamp(.14 + (prog - i) * .86, .14, 1));
+  const r = mt.getBoundingClientRect();
+  if (r.bottom < -vh || r.top > vh * 2) return;
+  const prog = clamp((vh * .85 - r.top) / (r.height + vh * .35), 0, 1) * words.length * 1.15;
+  words.forEach((w, i) => {
+    const o = Math.round(clamp(.14 + (prog - i) * .86, .14, 1) * 50) / 50;
+    if (o !== wordOp[i]) { wordOp[i] = o; w.style.opacity = o; }
+  });
 }
 addEventListener('scroll', () => { if (!ticking) { ticking = true; requestAnimationFrame(onScroll); } }, { passive: true });
 addEventListener('resize', onScroll); onScroll();
@@ -1003,7 +1261,8 @@ addEventListener('resize', onScroll); onScroll();
 ========================================================= */
 function initHero() {
   const pin = $('#heroPin'), gl = $('#gl'), sc = $('#scene'), sctx = sc.getContext('2d');
-  const dpr = Math.min(devicePixelRatio || 1, 1.75);
+  // the lens shader runs per pixel every frame; phones get fewer pixels
+  const dpr = Math.min(devicePixelRatio || 1, coarse ? 1.25 : 1.75);
   let W = 0, H = 0, introT = reduce ? 1 : 0, introStart = 0, visible = true, raf = 0, last = 0, fontsOk = false;
   let g = null, tex = null, U = {};
 

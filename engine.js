@@ -116,6 +116,25 @@
       return hand;
     }
     canPlace(i, r, c) { const p = this.hand[i]; return !!p && fits(this.board, p.cells, r, c); }
+    // player-only helpers (the AI never uses these)
+    snapshot() {
+      return { board: this.board.slice(), hand: this.hand.slice(), score: this.score, combo: this.combo, miss: this.miss, handIdx: this.handIdx, over: this.over };
+    }
+    restore(s) { Object.assign(this, s, { board: s.board.slice(), hand: s.hand.slice() }); }
+    // swap the pieces still in hand for new ones; seeded, so a shared board rerolls the same way
+    reroll() {
+      this.rerolls = (this.rerolls || 0) + 1;
+      const rng = seedFor((this.seed ^ Math.imul(this.rerolls, 0x2545F491)) >>> 0, 1 + this.handIdx);
+      const slots = [0, 1, 2].filter(i => this.hand[i]);
+      let hand = this.hand;
+      for (let t = 0; t < 800; t++) {
+        const h = this.hand.slice(); slots.forEach(i => { h[i] = randomPiece(rng); });
+        hand = h;
+        if (t < 500 ? slots.every(i => fitsAnywhere(this.board, h[i].cells)) : hasMove(this.board, h)) break;
+      }
+      this.hand = hand;
+      this.over = !hasMove(this.board, this.hand);
+    }
     place(i, r, c) {
       const p = this.hand[i], cells = p.cells, placed = [], cleared = [];
       let gain = cells.length;

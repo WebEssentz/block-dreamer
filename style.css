@@ -2328,6 +2328,7 @@ h2 {
 
 /* Spectator mode */
 #spec {
+    width: max-content;
     position: absolute;
     left: 50%;
     bottom: max(18px, env(safe-area-inset-bottom));
@@ -2457,5 +2458,454 @@ h2 {
         text-align: center;
         font-size: 12.5px;
         margin-bottom: 2px
+    }
+}
+
+/* ---------- AI level picker ---------- */
+.lvl {
+    display: inline-flex;
+    gap: 2px;
+    padding: 4px;
+    border-radius: 999px;
+    background: rgba(var(--ink), .06);
+    border: 1px solid var(--line)
+}
+
+.lvl button {
+    padding: 9px 16px;
+    border-radius: 999px;
+    font-size: 13.5px;
+    font-weight: 600;
+    color: var(--mut);
+    transition: background .3s var(--ease), color .3s, box-shadow .3s
+}
+
+.lvl button:hover {
+    color: var(--fg)
+}
+
+.lvl button.on {
+    background: var(--fg);
+    color: var(--bg);
+    box-shadow: 0 6px 18px var(--shadow)
+}
+
+.lvl-row {
+    display: flex;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 12px 16px;
+    margin-top: 18px
+}
+
+.lvl-row > small {
+    font-size: 11px;
+    font-weight: 600;
+    letter-spacing: .16em;
+    text-transform: uppercase;
+    color: var(--mut)
+}
+
+.lvl-hint {
+    font-size: 14px;
+    color: var(--mut)
+}
+
+/* ---------- in-game HUD: nothing here may change size while playing ---------- */
+.p-head,
+.p-head * {
+    white-space: nowrap
+}
+
+.status {
+    display: block;
+    width: 6.8em;
+    height: 16px;
+    line-height: 16px;
+    overflow: hidden;
+    text-align: right
+}
+
+.status.think::after {
+    width: 1.2em;
+    vertical-align: top
+}
+
+.panel canvas {
+    -webkit-touch-callout: none
+}
+
+@media (max-width: 760px) {
+    .arena.vs .panel.ai .p-head {
+        display: grid;
+        grid-template-columns: 1fr auto;
+        grid-template-areas: "lab st" "sc sc";
+        align-items: end;
+        row-gap: 2px
+    }
+
+    .arena.vs .panel.ai .p-head > div,
+    .arena.vs .panel.ai .p-right {
+        display: contents
+    }
+
+    .arena.vs .panel.ai .p-head small {
+        grid-area: lab
+    }
+
+    .arena.vs .panel.ai .p-head .score {
+        grid-area: sc
+    }
+
+    .arena.vs .panel.ai .status {
+        grid-area: st;
+        width: auto;
+        min-width: 0;
+        font-size: 11px
+    }
+
+    .arena.vs .panel.ai .combo {
+        display: none
+    }
+}
+
+/* ---------- touch devices: cheaper glass, no per-frame blur over live canvases ---------- */
+@media (pointer: coarse) {
+    .glass {
+        backdrop-filter: blur(12px);
+        -webkit-backdrop-filter: blur(12px)
+    }
+
+    #spec {
+        backdrop-filter: none;
+        -webkit-backdrop-filter: none;
+        background: rgba(var(--bgc), .9)
+    }
+
+    .result {
+        backdrop-filter: blur(8px);
+        -webkit-backdrop-filter: blur(8px)
+    }
+
+    .manifesto .w {
+        transition: none
+    }
+}
+
+.watch-prompt {
+    position: absolute;
+    inset: 0;
+    z-index: 12;
+    display: grid;
+    place-items: center;
+    padding: 20px;
+    background: rgba(var(--bgc), .68);
+    backdrop-filter: blur(12px);
+    -webkit-backdrop-filter: blur(12px);
+    animation: fade .25s both
+}
+
+.watch-card {
+    width: min(100%, 480px);
+    padding: clamp(28px, 6vw, 48px);
+    border-radius: 32px;
+    text-align: center;
+    animation: rise .45s var(--ease) both
+}
+
+.watch-card .eyebrow {
+    display: block;
+    margin-bottom: 10px
+}
+
+.watch-card h2 {
+    font-size: clamp(34px, 7vw, 54px);
+    line-height: 1.05;
+    letter-spacing: -.05em
+}
+
+.watch-card p {
+    margin-top: 18px;
+    color: var(--mut);
+    font-size: 15px
+}
+
+.watch-card p b {
+    color: var(--fg);
+    font-variant-numeric: tabular-nums
+}
+
+.watch-actions {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 10px;
+    margin-top: 28px
+}
+
+.watch-actions .btn {
+    min-height: 52px;
+    padding: 14px 16px;
+    font-size: 14px
+}
+
+@media (max-width: 520px) {
+    .watch-card {
+        padding: 30px 22px;
+        border-radius: 28px
+    }
+
+    .watch-actions {
+        grid-template-columns: 1fr
+    }
+}
+
+/* ---------- player help dock: hint, undo, reroll ---------- */
+.panel {
+    width: min(46vw, calc((100svh - 252px)*.774))
+}
+
+.arena.solo .panel {
+    width: min(92vw, calc((100svh - 252px)*.774))
+}
+
+.tools {
+    align-self: center;
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    margin-top: 2px;
+    padding: 5px;
+    border-radius: 999px;
+    position: relative;
+    transition: opacity .4s var(--ease)
+}
+
+.tool {
+    position: relative;
+    height: 40px;
+    min-width: 40px;
+    padding: 0 10px;
+    border-radius: 999px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    color: var(--fg);
+    transition: background .25s, opacity .3s, transform .3s var(--ease)
+}
+
+.tool:hover:not(:disabled) {
+    background: rgba(var(--ink), .08)
+}
+
+.tool:active:not(:disabled) {
+    transform: scale(.94)
+}
+
+.tool:disabled {
+    cursor: default;
+    opacity: .38
+}
+
+.tool svg {
+    flex: none
+}
+
+/* uses left, as a tiny counter in the corner */
+.tool .t-n {
+    position: absolute;
+    top: 3px;
+    right: 3px;
+    min-width: 15px;
+    height: 15px;
+    padding: 0 4px;
+    border-radius: 999px;
+    font-size: 9.5px;
+    font-weight: 800;
+    line-height: 15px;
+    text-align: center;
+    font-variant-numeric: tabular-nums;
+    background: var(--fg);
+    color: var(--bg)
+}
+
+.tool.spent .t-n {
+    background: rgba(var(--ink), .14);
+    color: var(--mut)
+}
+
+/* the hint button is the one with a label; fixed width so "Dreaming" never shifts the dock */
+.tool.t-hint {
+    width: 156px;
+    justify-content: flex-start;
+    gap: 7px;
+    padding: 0 9px 0 13px;
+    background: rgba(var(--ink), .07);
+    font-size: 13.5px;
+    font-weight: 600
+}
+
+.tool.t-hint .t-n {
+    position: static;
+    flex: none;
+    margin-left: auto
+}
+
+.t-lab {
+    white-space: nowrap;
+    min-width: 0
+}
+
+/* Hard: no hints, so the hint button and its divider go away */
+.tools.no-hint .t-hint,
+.tools.no-hint .t-sep {
+    display: none
+}
+
+.tool.t-hint.busy {
+    overflow: hidden
+}
+
+.tool.t-hint.busy .t-lab::after {
+    content: "";
+    display: inline-block;
+    width: 1.2em;
+    text-align: left;
+    animation: dots 1.2s steps(4) infinite
+}
+
+.tool.t-hint.busy svg {
+    animation: hintPulse 1s ease-in-out infinite
+}
+
+.tool.t-hint.busy::before {
+    content: "";
+    position: absolute;
+    inset: 0;
+    background: linear-gradient(100deg, transparent 30%, rgba(var(--ink), .14) 50%, transparent 70%);
+    animation: shimmer 1.2s linear infinite
+}
+
+.tool.t-hint.active {
+    background: var(--fg);
+    color: var(--bg);
+    opacity: 1
+}
+
+.tool.t-hint.active .t-n {
+    background: var(--bg);
+    color: var(--fg)
+}
+
+@keyframes hintPulse {
+    50% {
+        opacity: .35;
+        transform: scale(.88)
+    }
+}
+
+@keyframes shimmer {
+    from {
+        transform: translateX(-100%)
+    }
+
+    to {
+        transform: translateX(100%)
+    }
+}
+
+.t-sep {
+    width: 1px;
+    height: 20px;
+    margin: 0 4px;
+    background: var(--line)
+}
+
+/* out of moves but a rescue is left: the usable tools breathe, and an exit appears */
+.t-end {
+    display: none;
+    height: 40px;
+    padding: 0 16px;
+    margin-left: 2px;
+    border-radius: 999px;
+    font-size: 13px;
+    font-weight: 600;
+    color: var(--mut);
+    transition: color .25s, background .25s
+}
+
+.t-end:hover {
+    color: var(--fg);
+    background: rgba(var(--ink), .08)
+}
+
+.tools.stuck .t-end {
+    display: inline-flex;
+    align-items: center
+}
+
+.tool.glow {
+    animation: toolGlow 1.6s ease-in-out infinite
+}
+
+@keyframes toolGlow {
+    50% {
+        box-shadow: 0 0 0 4px rgba(var(--ink), .12)
+    }
+}
+
+.arena.spectate .tools {
+    opacity: 0;
+    pointer-events: none
+}
+
+.arena.spectate .panel {
+    width: min(46vw, calc((100svh - 260px) * .774))
+}
+
+@media (max-width: 760px) {
+    .arena.vs .panel.you {
+        width: min(94vw, calc((100svh - 412px)*.774))
+    }
+
+    .arena.solo .panel {
+        width: min(94vw, calc((100svh - 236px)*.774))
+    }
+
+    .tools {
+        padding: 4px
+    }
+
+    .tool,
+    .t-end {
+        height: 38px;
+        min-width: 38px
+    }
+
+    .tool.t-hint {
+        width: 148px;
+        font-size: 13px
+    }
+}
+
+@media (max-height: 640px) {
+    .tool {
+        height: 36px;
+        min-width: 36px
+    }
+
+    .t-end {
+        height: 36px
+    }
+}
+
+/* keep both boards on one line now that only yours has a dock under it */
+@media (min-width: 761px) {
+    .arena.vs .panel.ai {
+        padding-bottom: 59px
+    }
+
+    .arena.vs.spectate .panel.ai {
+        padding-bottom: 0
     }
 }

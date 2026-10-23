@@ -11,8 +11,17 @@ const F_LINES = 0, F_GAIN = 1, F_FREE = 2, F_HAND = 3, F_FILL = 4;
 
 let session = null, META = { rstd: 1 };
 let CFG = { beam: 6, topk: 6, samples: 3 };
-let rng = Engine.mulberry32(1);
+let rng = Engine.mulberry32(1), srng = Engine.mulberry32(2);
 let plan = [], expect = null;
+
+// difficulty: `dream` = beam search over the hand, `slip` = chance per move of
+// playing one of the policy's runner-up moves instead of the best one.
+const LEVELS = {
+  easy: { dream: false, slip: .25 },
+  normal: { dream: false, slip: .05 },
+  hard: { dream: true, slip: 0 },
+};
+let LV = LEVELS.normal;
 
 // ---------- tables (bitboards: cells 0..31 in lo, 32..63 in hi) ----------
 const TW = SHAPES.reduce((s, x) => s + x.w, 0);
@@ -143,11 +152,16 @@ function sampleHand(st) {
   return cands[allPick >= 0 ? allPick : (anyPick >= 0 ? anyPick : 0)];
 }
 
-async function greedy(root) {
+async function greedy(root, slip = false) {
   const enc = encodeBatch([root]); const out = await runNet(enc, 1);
-  let best = -1, bv = -Infinity;
-  for (let a = 0; a < NA; a++) if (out.logits[a] > -1e8 && out.logits[a] > bv) { bv = out.logits[a]; best = a; }
-  return best;
+  const ranked = topIdx(out.logits, 0, 8);
+  if (!ranked.length) return -1;
+  if (!slip || ranked.length < 2) return ranked[0];
+  return ranked[1 + Math.floor(srng() * (ranked.length - 1))];
+}
+function stepOf(root, a) {
+  const slot = a >> 6, anc = a & 63, ns = apply(root, slot, anc);
+  return { i: slot, r: anc >> 3, c: anc & 7, sid: root.hand[slot], lo: ns.lo, hi: ns.hi };
 }
 
 // ---------- the "dream": beam search over the whole hand ----------
@@ -160,7 +174,7 @@ async function dream(root) {
     const out = await runNet(encodeBatch(states), B);
     const kids = [];
     for (let i = 0; i < B; i++) {
-      for (const a of topIdx(out.logits, i * NA, CFG.topk)) {
+      for (const a of topIdx(out.logits, i * NA, LV.topk || CFG.topk)) {
         const ns = apply(states[i], a >> 6, a & 63);
         kids.push({ st: ns, cum: cum[i] + ns.gain / 10 / rstd, path: paths[i].concat(a) });
       }
@@ -181,7 +195,7 @@ async function dream(root) {
       const enc = encodeBatch(kids.map(k => k.st)); const o2 = await runNet(enc, kids.length);
       for (let i = 0; i < kids.length; i++) vals[i] = enc.any[i] ? o2.values[i] : -death;
     }
-    const order = kids.map((k, i) => i).sort((x, y) => (kids[y].cum + GAMMA * vals[y]) - (kids[x].cum + GAMMA * vals[x])).slice(0, CFG.beam);
+    const order = kids.map((k, i) => i).sort((x, y) => (kids[y].cum + GAMMA * vals[y]) - (kids[x].cum + GAMMA * vals[x])).slice(0, LV.beam || CFG.beam);
     states = order.map(i => kids[i].st); cum = order.map(i => kids[i].cum); paths = order.map(i => kids[i].path);
   }
   let path = paths[0];
@@ -199,7 +213,11 @@ async function move(m) {
   const root = mkState(m.state.board, m.state.hand, m.state.combo, m.state.miss);
   let st = plan[0], replanned = false;
   const t0 = performance.now();
-  if (st && expect && expect.lo === root.lo && expect.hi === root.hi && root.hand[st.i] === st.sid) {
+  const slip = LV.slip > 0 && srng() < LV.slip;
+  if (slip || !LV.dream) {
+    const a = await greedy(root, slip);
+    plan = []; st = a < 0 ? null : stepOf(root, a);
+  } else if (st && expect && expect.lo === root.lo && expect.hi === root.hi && root.hand[st.i] === st.sid) {
     plan.shift();
   } else {
     replanned = !!st;
@@ -210,6 +228,20 @@ async function move(m) {
   expect = { lo: st.lo, hi: st.hi };
   return { type: 'move', id: m.id, i: st.i, r: st.r, c: st.c, replanned,
            plan: plan.map(p => ({ i: p.i, r: p.r, c: p.c })), ms: performance.now() - t0 };
+}
+
+// Stateless best move for the human: always full strength, no slips, and it
+// never touches the opponent's plan. Sampling is seeded from the board so the
+// same position always gets the same hint.
+async function hint(m) {
+  const root = mkState(m.state.board, m.state.hand, m.state.combo, m.state.miss);
+  const saved = { LV, rng };
+  LV = LEVELS.hard; rng = Engine.mulberry32((root.lo ^ Math.imul(root.hi, 0x9E3779B1) ^ 0x51ED) >>> 0);
+  try {
+    const steps = await dream(root);
+    const st = steps[0];
+    return st ? { type: 'hint', id: m.id, i: st.i, r: st.r, c: st.c } : { type: 'hint', id: m.id, none: true };
+  } finally { LV = saved.LV; rng = saved.rng; }
 }
 
 async function handle(m) {
@@ -229,9 +261,12 @@ async function handle(m) {
     await runNet(encodeBatch([warm]), 1);               // throwaway run so the first real move is fast
     postMessage({ type: 'ready' });
   } else if (m.type === 'reset') {
-    rng = Engine.mulberry32((m.seed >>> 0) ^ 0xA5A5A5); plan = []; expect = null;
+    rng = Engine.mulberry32((m.seed >>> 0) ^ 0xA5A5A5); srng = Engine.mulberry32((m.seed >>> 0) ^ 0x5EED); plan = []; expect = null;
+    LV = LEVELS[m.level] || LEVELS.normal;
   } else if (m.type === 'move') {
     postMessage(await move(m));
+  } else if (m.type === 'hint') {
+    postMessage(await hint(m));
   }
 }
 
