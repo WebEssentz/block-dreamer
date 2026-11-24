@@ -1273,6 +1273,26 @@ h2 {
     animation-delay: .12s
 }
 
+/* ---------- mobile native app mode ---------- */
+body.mobile-app-mode #landing,
+body.mobile-app-mode #nav {
+    display: none !important;
+}
+
+body.mobile-app-mode .pick .pk-x {
+    display: none !important;
+}
+
+body.mobile-app-mode .pick {
+    position: fixed;
+    inset: 0;
+    opacity: 1 !important;
+    pointer-events: auto !important;
+    transform: none !important;
+    backdrop-filter: none;
+    background: var(--bg);
+}
+
 @media(max-width:760px) {
     .arena.vs {
         flex-direction: column;

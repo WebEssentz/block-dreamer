@@ -12,6 +12,7 @@ const sleep = ms => new Promise(r => setTimeout(r, ms));
 const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
 const reduce = matchMedia('(prefers-reduced-motion: reduce)').matches;
 const coarse = matchMedia('(pointer: coarse)').matches;
+const isNativeApp = !!(window.Capacitor && window.Capacitor.isNativePlatform && window.Capacitor.isNativePlatform()) || coarse;
 const ease = t => t * t * (3 - 2 * t);
 const hz = n => 440 * Math.pow(2, (n - 69) / 12);
 
@@ -896,7 +897,7 @@ async function begin() {                    // countdown, then go
     if (!AI.ready) { note.textContent = 'Waking the AI…'; note.classList.add('show'); }
     const ok = await AI.whenReady(); note.classList.remove('show');
     if (tok !== M.token) return;
-    if (!ok) { toast('AI failed to load: ' + (AI.err || 'unknown') + '. Serve over http(s), not file://'); await sleep(600); if (tok === M.token) exitGame(); return; }
+    if (!ok) { const err = AI.err || 'unknown'; toast('AI failed to load: ' + err); alert('AI failed to load: ' + err); await sleep(1500); if (tok === M.token) exitGame(); return; }
     AI.reset(M.seed, level);
   }
   if (!(await countdown(tok))) return;
@@ -947,8 +948,13 @@ async function exitGame() {
   const spec = $('#spec'); if (spec) spec.remove(); $('#arena').classList.remove('spectate');
   await irisIn(innerWidth / 2, innerHeight / 2);
   cancelAnimationFrame(M.raf); M.raf = 0; $('#game').hidden = true; $('#result').hidden = true; $('#countdown').textContent = '';
-  document.body.classList.remove('in-game'); $('#landing').style.display = ''; window.scrollTo(0, savedScroll);
-  renderRecord();
+  document.body.classList.remove('in-game');
+  if (isNativeApp) {
+    openPick();
+  } else {
+    $('#landing').style.display = ''; window.scrollTo(0, savedScroll);
+    renderRecord();
+  }
   await sleep(80); await irisOut(); M.busy = false;
 }
 
@@ -988,7 +994,7 @@ function closePick(instant) {
   pickTimer = setTimeout(() => { pick.hidden = true; pick.classList.remove('off'); }, instant || reduce ? 0 : 700);
 }
 // leave through history so the phone's back button and Esc behave the same way
-function dismissPick() { if (pickPushed) { pickPushed = false; history.back(); } else closePick(); }
+function dismissPick() { if (isNativeApp) return; if (pickPushed) { pickPushed = false; history.back(); } else closePick(); }
 addEventListener('popstate', () => { pickPushed = false; if (!pick.hidden) closePick(); });
 $('.pk-x', pick).addEventListener('click', dismissPick);
 if (!coarse && !reduce) $$('.pk-card', pick).forEach(c => {
@@ -1497,10 +1503,20 @@ void main(){
   const go = () => { introStart = performance.now(); if (reduce) { introT = 1; } drawScene(introT); upload(); start(); };
   (document.fonts && document.fonts.load ? document.fonts.load('800 80px Inter').catch(() => {}) : Promise.resolve()).then(() => { fontsOk = true; size(); window.__heroGo = go; });
 }
-initHero();
-
-/* loader */
+/* loader & startup */
 function hideLoader() { $('#loader').classList.add('done'); if (window.__heroGo) window.__heroGo(); else setTimeout(() => window.__heroGo && window.__heroGo(), 200); }
-const loaded = new Promise(r => document.readyState === 'complete' ? r() : addEventListener('load', r));
-Promise.all([loaded, sleep(900)]).then(() => { hideLoader(); setTimeout(() => AI.init(), 1200); });   // start loading the model while they read
+
+if (isNativeApp) {
+  document.body.classList.add('mobile-app-mode');
+  const landing = $('#landing'), nav = $('#nav');
+  if (landing) landing.style.display = 'none';
+  if (nav) nav.style.display = 'none';
+  hideLoader();
+  openPick();
+  setTimeout(() => AI.init(), 300);
+} else {
+  initHero();
+  const loaded = new Promise(r => document.readyState === 'complete' ? r() : addEventListener('load', r));
+  Promise.all([loaded, sleep(900)]).then(() => { hideLoader(); setTimeout(() => AI.init(), 1200); });
+}
 })();

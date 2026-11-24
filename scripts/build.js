@@ -11,9 +11,13 @@ if (!fs.existsSync(lib)) fs.mkdirSync(lib, { recursive: true });
 // Copy ONNX Runtime Web WASM files for 100% offline play
 const ortDist = path.join(root, 'node_modules', 'onnxruntime-web', 'dist');
 const ortFiles = [
+  'ort.min.js',
+  'ort.all.min.js',
   'ort.wasm.min.js',
   'ort-wasm-simd-threaded.mjs',
-  'ort-wasm-simd-threaded.wasm'
+  'ort-wasm-simd-threaded.wasm',
+  'ort-wasm-simd-threaded.jsep.mjs',
+  'ort-wasm-simd-threaded.jsep.wasm'
 ];
 
 for (const f of ortFiles) {

@@ -247,21 +247,57 @@ async function hint(m) {
 async function handle(m) {
   if (m.type === 'init') {
     CFG = m.preset === 'fast' ? { beam: 4, topk: 4, samples: 2 } : { beam: 6, topk: 6, samples: 3 };
+    const baseDir = (self.location.href.split('?')[0]).replace(/\/[^\/]*$/, '/');
+    const localLib = baseDir + 'lib/';
+
+    let loadedLocal = false;
     try {
-      importScripts('lib/ort.wasm.min.js');
-      ort.env.wasm.wasmPaths = 'lib/';
-    } catch (_) {
-      importScripts(ORT_BASE + 'ort.wasm.min.js');
-      ort.env.wasm.wasmPaths = ORT_BASE;
+      importScripts(localLib + 'ort.min.js');
+      ort.env.wasm.wasmPaths = localLib;
+      ort.env.wasm.numThreads = 1;
+      ort.env.wasm.proxy = false;
+      loadedLocal = true;
+    } catch (e1) {
+      try {
+        importScripts(localLib + 'ort.wasm.min.js');
+        ort.env.wasm.wasmPaths = localLib;
+        ort.env.wasm.numThreads = 1;
+        ort.env.wasm.proxy = false;
+        loadedLocal = true;
+      } catch (e2) {}
     }
-    ort.env.wasm.numThreads = 1;      // no SharedArrayBuffer needed -> works on GitHub Pages & mobile WebView
-    ort.env.wasm.proxy = false;       // we ARE the worker
+
+    if (!loadedLocal) {
+      importScripts(ORT_BASE + 'ort.min.js');
+      ort.env.wasm.wasmPaths = ORT_BASE;
+      ort.env.wasm.numThreads = 1;
+      ort.env.wasm.proxy = false;
+    }
+
+    const modelUrl = baseDir + 'model.onnx';
+    const metaUrl = baseDir + 'model.json';
+
     const [buf, meta] = await Promise.all([
-      fetch('model.onnx').then(r => { if (!r.ok) throw new Error('model.onnx not found'); return r.arrayBuffer(); }),
-      fetch('model.json').then(r => r.json()).catch(() => ({ rstd: 1 })),
+      fetch(modelUrl).then(async r => {
+        if (!r.ok) {
+          const r2 = await fetch('model.onnx');
+          if (!r2.ok) throw new Error('model.onnx not found (' + r.status + ')');
+          return r2.arrayBuffer();
+        }
+        return r.arrayBuffer();
+      }),
+      fetch(metaUrl).then(r => r.json()).catch(() => ({ rstd: 1 })),
     ]);
     META = meta;
-    session = await ort.InferenceSession.create(buf, { executionProviders: ['wasm'], graphOptimizationLevel: 'all' });
+
+    try {
+      session = await ort.InferenceSession.create(buf, { executionProviders: ['wasm'], graphOptimizationLevel: 'all' });
+    } catch (createErr) {
+      console.warn('Local WASM init failed, retrying with CDN runtime:', createErr);
+      ort.env.wasm.wasmPaths = ORT_BASE;
+      session = await ort.InferenceSession.create(buf, { executionProviders: ['wasm'], graphOptimizationLevel: 'all' });
+    }
+
     const warm = mkState(new Array(64).fill(0), [0, 1, 2], 0, 0);
     await runNet(encodeBatch([warm]), 1);               // throwaway run so the first real move is fast
     postMessage({ type: 'ready' });
