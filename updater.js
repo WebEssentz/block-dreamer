@@ -3,7 +3,7 @@
 
 const UPDATER_REPO = 'WebEssentz/block-dreamer';
 const UPDATER_BRANCH = 'mobile-app';
-const VERSION_URL = `https://raw.githubusercontent.com/${UPDATER_REPO}/${UPDATER_BRANCH}/version.json`;
+const BRANCH_API = `https://api.github.com/repos/${UPDATER_REPO}/branches/${UPDATER_BRANCH}`;
 const RAW_BASE = `https://raw.githubusercontent.com/${UPDATER_REPO}/${UPDATER_BRANCH}/`;
 
 const Updater = {
@@ -29,7 +29,6 @@ const Updater = {
 
     this.updateUI();
 
-    // If online, check after boot settles; otherwise wait until device comes online
     if (navigator.onLine) {
       setTimeout(() => this.check(false), 3000);
     } else {
@@ -53,6 +52,21 @@ const Updater = {
     }
   },
 
+  async resolveRemoteBase() {
+    try {
+      const bRes = await fetch(BRANCH_API, {
+        cache: 'no-store',
+        headers: { 'Accept': 'application/vnd.github+json' }
+      });
+      if (bRes.ok) {
+        const bData = await bRes.json();
+        const sha = bData && bData.commit && bData.commit.sha;
+        if (sha) return `https://raw.githubusercontent.com/${UPDATER_REPO}/${sha}/`;
+      }
+    } catch (_) {}
+    return RAW_BASE;
+  },
+
   async check(manual = false) {
     if (this.downloadedReady) {
       window.location.reload();
@@ -74,7 +88,8 @@ const Updater = {
     this.updateUI('Checking updates...', 'Checking...');
 
     try {
-      const res = await fetch(`${VERSION_URL}?_t=${Date.now()}`, { cache: 'no-store' });
+      const base = await this.resolveRemoteBase();
+      const res = await fetch(`${base}version.json?_t=${Date.now()}`, { cache: 'no-store' });
       if (!res.ok) throw new Error('Network error');
       const remote = await res.json();
 
@@ -85,10 +100,10 @@ const Updater = {
 
       if (hasUpdate) {
         this.updateUI('Downloading update...', 'Downloading...');
-        await this.downloadUpdate(remote);
+        await this.downloadUpdate(remote, base);
       } else {
         this.updateUI('App up to date', 'Up to Date');
-        if (manual) this.toast('Block Dreamer is up to date.');
+        if (manual) this.toast(`v${this.currentVersion} is up to date.`);
         setTimeout(() => this.updateUI(null, 'Check for Update'), 2500);
       }
     } catch (err) {
@@ -112,15 +127,15 @@ const Updater = {
     }
   },
 
-  async downloadUpdate(remote) {
+  async downloadUpdate(remote, base = RAW_BASE) {
     try {
       const q = `?_t=${Date.now()}`;
       const [htmlRes, cssRes, engineRes, updaterRes, jsRes] = await Promise.all([
-        fetch(`${RAW_BASE}index.html${q}`, { cache: 'no-store' }),
-        fetch(`${RAW_BASE}style.css${q}`, { cache: 'no-store' }),
-        fetch(`${RAW_BASE}engine.js${q}`, { cache: 'no-store' }),
-        fetch(`${RAW_BASE}updater.js${q}`, { cache: 'no-store' }),
-        fetch(`${RAW_BASE}app.js${q}`, { cache: 'no-store' })
+        fetch(`${base}index.html${q}`, { cache: 'no-store' }),
+        fetch(`${base}style.css${q}`, { cache: 'no-store' }),
+        fetch(`${base}engine.js${q}`, { cache: 'no-store' }),
+        fetch(`${base}updater.js${q}`, { cache: 'no-store' }),
+        fetch(`${base}app.js${q}`, { cache: 'no-store' })
       ]);
 
       if (!htmlRes.ok || !cssRes.ok || !engineRes.ok || !updaterRes.ok || !jsRes.ok) {
@@ -164,16 +179,13 @@ const Updater = {
       this.currentCommit = remote.commit || '';
       this.currentTimestamp = Number(remote.timestamp) || Date.now();
       this.downloadedReady = true;
-      this.updateUI(`v${this.currentVersion} ready`, 'Restart');
-
-      const smChip = document.querySelector('.sm-status-chip');
-      if (smChip) smChip.textContent = 'Update Ready';
-
+      this.updateUI(`v${this.currentVersion} ready`, 'Restart to Apply');
+      this.toast(`v${this.currentVersion} ready — tap Restart.`);
       this.promptRestart();
     } catch (err) {
       console.error('Failed to download update:', err);
       this.updateUI('Update failed', 'Retry');
-      if (typeof window.toast === 'function') window.toast('Update download failed.');
+      this.toast('Update download failed.');
     }
   },
 

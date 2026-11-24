@@ -1100,7 +1100,8 @@ async function exitGame() {
    UI wiring
 ========================================================= */
 let toastT;
-function toast(msg) { const t = $('#toast'); t.textContent = msg; t.classList.add('show'); clearTimeout(toastT); toastT = setTimeout(() => t.classList.remove('show'), 3200); }
+function toast(msg) { const t = $('#toast'); if (!t) return; t.textContent = msg; t.classList.add('show'); clearTimeout(toastT); toastT = setTimeout(() => t.classList.remove('show'), 3200); }
+window.toast = toast;
 const QP = new URLSearchParams(location.search);
 const QSEED = QP.has('seed') && /^\d+$/.test(QP.get('seed')) ? parseInt(QP.get('seed'), 10) : null;
 const qnum = k => QP.has(k) && /^\d{1,7}$/.test(QP.get(k)) ? parseInt(QP.get(k), 10) : null;

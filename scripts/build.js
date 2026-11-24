@@ -42,6 +42,15 @@ let verData = {
   apkUrl: 'https://github.com/WebEssentz/block-dreamer/releases/download/latest-apk/app-debug.apk'
 };
 
+function bumpPatch(ver) {
+  const parts = String(ver || '1.0.1').split('.').map(n => parseInt(n, 10));
+  if (parts.length === 3 && parts.every(Number.isFinite)) {
+    parts[2] += 1;
+    return parts.join('.');
+  }
+  return '1.0.2';
+}
+
 try {
   if (fs.existsSync(verPath)) {
     const existing = JSON.parse(fs.readFileSync(verPath, 'utf8'));
@@ -51,10 +60,11 @@ try {
     const { execSync } = require('child_process');
     let commit = verData.commit;
     try { commit = execSync('git rev-parse --short HEAD', { cwd: root }).toString().trim() || commit; } catch (_) {}
+    verData.version = bumpPatch(verData.version);
     verData.commit = commit;
     verData.timestamp = Date.now();
     fs.writeFileSync(verPath, JSON.stringify(verData, null, 2) + '\n');
-    console.log(`Updated version.json (timestamp=${verData.timestamp})`);
+    console.log(`Updated version.json (version=v${verData.version}, timestamp=${verData.timestamp})`);
   }
 } catch (e) {
   console.warn('Could not process version.json', e.message);

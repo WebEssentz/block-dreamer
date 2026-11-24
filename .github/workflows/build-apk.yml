@@ -54,20 +54,35 @@ jobs:
           if-no-files-found: error
           retention-days: 30
 
+      - name: Update latest-apk Tag & Read Version
+        if: github.event_name == 'workflow_dispatch' || github.ref == 'refs/heads/main' || github.ref == 'refs/heads/mobile-app'
+        id: meta
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git tag -f latest-apk
+          git push -f origin latest-apk
+          VER=$(node -p "require('./version.json').version")
+          SHA=$(git rev-parse --short HEAD)
+          echo "version=$VER" >> $GITHUB_OUTPUT
+          echo "sha=$SHA" >> $GITHUB_OUTPUT
+
       - name: Create or Update Release with Direct APK Download
         if: github.event_name == 'workflow_dispatch' || github.ref == 'refs/heads/main' || github.ref == 'refs/heads/mobile-app'
         uses: softprops/action-gh-release@v2
         with:
           files: android/app/build/outputs/apk/debug/app-debug.apk
-          name: "Block Puzzle Android APK"
+          name: "Block Dreamer v${{ steps.meta.outputs.version }} (${{ steps.meta.outputs.sha }})"
           tag_name: "latest-apk"
+          target_commitish: "${{ github.ref_name }}"
           make_latest: true
+          overwrite_files: true
           body: |
-            ### Block Puzzle Mobile APK (Android)
+            ### Block Dreamer Android APK — v${{ steps.meta.outputs.version }} (`${{ steps.meta.outputs.sha }}`)
             - **100% Offline**: Neural network ONNX engine and WebAssembly runtime bundled locally.
-            - **Native Haptics**: Vibration on block placement, clears, and combos.
-            - **Mobile View**: Optimized for thumb play and safe area navigation.
+            - **Live OTA Updates**: Future web/UI updates sync automatically in-app.
+            - **Native Haptics & Pause**: Vibration feedback and freeze-safe Pause overlay.
 
-            Directly download `app-debug.apk` below and open on your Android phone!
+            Directly download `app-debug.apk` below and install on your Android phone.
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
