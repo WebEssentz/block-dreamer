@@ -299,9 +299,9 @@ class BoardView {
   dragPose(d) {
     const p = this.game.hand[d.i], [h, w] = pieceSize(p.cells), k = ease(d.k), s = TRAY_CELL + (CELL - TRAY_CELL) * k;
     const cx = d.x, cy = d.y - this.lift(d) * k;
-    const px = clamp(cx - w * s / 2, BX, BX + BW - w * s), py = clamp(cy - h * s / 2, BY - CELL, BY + BW + CELL);
+    const px = clamp(cx - w * s / 2, BX, BX + BW - w * s), py = clamp(cy - h * s / 2, BY, BY + BW + CELL);
     const fc = (clamp(cx - w * CELL / 2, BX, BX + BW - w * CELL) - BX) / CELL;
-    const fr = (clamp(cy - h * CELL / 2, BY - CELL * .6, BY + BW - h * CELL + CELL * .6) - BY) / CELL;
+    const fr = (clamp(cy - h * CELL / 2, BY, BY + BW - h * CELL) - BY) / CELL;
     return { s, px, py, fr, fc, home: cy > BY + BW + CELL * .35 };
   }
   // nearest legal anchor to the piece's floating position, within DROP_SNAP cells
@@ -348,7 +348,10 @@ class BoardView {
     });
     cv.addEventListener('pointermove', e => {
       const d = this.drag; if (!d || e.pointerId !== d.id) return;
-      const p = this.toLogical(e); d.x = p.x; d.y = p.y; this.dirty = true;
+      const p = this.toLogical(e);
+      d.x = clamp(p.x, BX - CELL * .5, BX + BW + CELL * .5);
+      d.y = clamp(p.y, BY, this.H);
+      this.dirty = true;
     });
     cv.addEventListener('pointerup', e => end(e, true));
     cv.addEventListener('pointercancel', e => end(e, false));
@@ -1542,34 +1545,88 @@ function initMobileHome() {
     enterGame('vs', innerWidth / 2, innerHeight / 2);
   });
 
-  const soundBtn = $('#mhBtnSound');
-  if (soundBtn) {
-    soundBtn.addEventListener('click', () => {
-      Sfx.on = !Sfx.on;
+  // Liquid glass hamburger dropdown
+  const menuWrap = $('.mh-menu-wrap');
+  const menuBtn = $('#mhMenuBtn');
+  const dropdown = $('#mhDropdown');
+  if (menuBtn && dropdown) {
+    menuBtn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      const open = !dropdown.hidden;
+      dropdown.hidden = open;
+      if (menuWrap) menuWrap.classList.toggle('open', !open);
+      menuBtn.setAttribute('aria-expanded', !open);
       Haptics.vibrate('selection');
-      $('#mhIcoOn').style.display = Sfx.on ? '' : 'none';
-      $('#mhIcoOff').style.display = Sfx.on ? 'none' : '';
-      const st = $('#mhSoundText');
-      if (st) st.textContent = Sfx.on ? 'Sound' : 'Muted';
-      const gOn = $('#icoOn'), gOff = $('#icoOff');
-      if (gOn) gOn.style.display = Sfx.on ? '' : 'none';
-      if (gOff) gOff.style.display = Sfx.on ? 'none' : '';
+    });
+
+    document.addEventListener('click', (e) => {
+      if (!dropdown.hidden && !dropdown.contains(e.target) && !menuBtn.contains(e.target)) {
+        dropdown.hidden = true;
+        if (menuWrap) menuWrap.classList.remove('open');
+        menuBtn.setAttribute('aria-expanded', 'false');
+      }
     });
   }
 
-  const themeBtn = $('#mhBtnTheme');
-  if (themeBtn) {
-    themeBtn.addEventListener('click', () => {
+  // Theme toggle in dropdown
+  const dropTheme = $('#mhDropTheme');
+  const updateThemeUI = (theme) => {
+    const val = $('#mhDropThemeVal');
+    if (val) val.textContent = theme === 'dark' ? 'Dark' : 'Light';
+    const icoSun = $('#mhDropIcoSun');
+    const icoMoon = $('#mhDropIcoMoon');
+    if (icoSun) icoSun.style.display = theme === 'dark' ? '' : 'none';
+    if (icoMoon) icoMoon.style.display = theme === 'dark' ? 'none' : '';
+  };
+  const curTheme = document.documentElement.getAttribute('data-theme') || 'dark';
+  updateThemeUI(curTheme);
+
+  if (dropTheme) {
+    dropTheme.addEventListener('click', () => {
       const cur = document.documentElement.getAttribute('data-theme') || 'dark';
       const next = cur === 'dark' ? 'light' : 'dark';
       document.documentElement.setAttribute('data-theme', next);
       try { localStorage.setItem('theme', next); } catch (_) {}
       dispatchEvent(new CustomEvent('themechange', { detail: next }));
       Haptics.vibrate('selection');
-      const tt = $('#mhThemeText');
-      if (tt) tt.textContent = next === 'dark' ? 'Dark' : 'Light';
+      updateThemeUI(next);
     });
   }
+
+  // Sound toggle in dropdown
+  const dropSound = $('#mhDropSound');
+  const updateSoundUI = () => {
+    const val = $('#mhDropSoundVal');
+    if (val) val.textContent = Sfx.on ? 'On' : 'Muted';
+    const onIco = $('#mhDropIcoSoundOn');
+    const offIco = $('#mhDropIcoSoundOff');
+    if (onIco) onIco.style.display = Sfx.on ? '' : 'none';
+    if (offIco) offIco.style.display = Sfx.on ? 'none' : '';
+  };
+  updateSoundUI();
+
+  if (dropSound) {
+    dropSound.addEventListener('click', () => {
+      Sfx.on = !Sfx.on;
+      Haptics.vibrate('selection');
+      updateSoundUI();
+      const gOn = $('#icoOn'), gOff = $('#icoOff');
+      if (gOn) gOn.style.display = Sfx.on ? '' : 'none';
+      if (gOff) gOff.style.display = Sfx.on ? 'none' : '';
+    });
+  }
+
+  // OTA updater manual check
+  const btnUpdate = $('#mhBtnCheckUpdate');
+  if (btnUpdate) {
+    btnUpdate.addEventListener('click', () => {
+      Haptics.vibrate('selection');
+      if (window.Updater) window.Updater.check(true);
+    });
+  }
+
+  // Init updater
+  if (window.Updater) window.Updater.init();
 
   setLevel(level);
   setTimeout(placePills, 80);

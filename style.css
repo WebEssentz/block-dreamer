@@ -1343,40 +1343,21 @@ body.in-game .mobile-home,
     align-items: center;
     justify-content: space-between;
     padding-top: 4px;
-}
-
-.mh-status-chip {
-    display: inline-flex;
-    align-items: center;
-    gap: 7px;
-    padding: 6px 14px;
-    border-radius: 999px;
-    font-size: 11px;
-    font-weight: 700;
-    letter-spacing: 0.04em;
-    color: var(--mut);
-    background: rgba(var(--ink), 0.04);
-    border: 1px solid rgba(var(--ink), 0.08);
-}
-
-.mh-status-dot {
-    width: 7px;
-    height: 7px;
-    border-radius: 50%;
-    background: #10b981;
-    box-shadow: 0 0 8px rgba(16, 185, 129, 0.6);
+    position: relative;
+    z-index: 90;
 }
 
 .mh-badge-best {
     display: inline-flex;
     align-items: center;
     gap: 8px;
-    padding: 6px 14px;
+    padding: 8px 16px;
     border-radius: 999px;
-    font-size: 12px;
+    font-size: 12.5px;
     font-weight: 700;
-    background: rgba(var(--ink), 0.04);
-    border: 1px solid rgba(var(--ink), 0.08);
+    background: rgba(var(--ink), 0.05);
+    border: 1px solid rgba(var(--ink), 0.1);
+    box-shadow: 0 4px 16px rgba(var(--shadow), 0.06);
 }
 
 .mh-badge-best .lbl {
@@ -1388,9 +1369,156 @@ body.in-game .mobile-home,
 
 .mh-badge-best b {
     color: var(--fg);
-    font-size: 14px;
+    font-size: 14.5px;
     font-weight: 800;
     font-variant-numeric: tabular-nums;
+}
+
+/* Liquid Glass Hamburger Button */
+.mh-menu-wrap {
+    position: relative;
+}
+
+.mh-hamburger-btn {
+    width: 44px;
+    height: 44px;
+    border-radius: 14px;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    align-items: center;
+    gap: 4px;
+    background: rgba(var(--ink), 0.05);
+    border: 1px solid rgba(var(--ink), 0.12);
+    box-shadow: 0 4px 16px rgba(var(--shadow), 0.08), inset 0 1px 0 rgba(255, 255, 255, 0.2);
+    cursor: pointer;
+    transition: transform 0.15s ease, background 0.2s ease;
+}
+
+.mh-hamburger-btn:active {
+    transform: scale(0.92);
+}
+
+.mh-hamburger-btn .h-bar {
+    width: 18px;
+    height: 2px;
+    border-radius: 2px;
+    background: var(--fg);
+    transition: transform 0.25s var(--ease), opacity 0.2s ease;
+}
+
+.mh-menu-wrap.open .mh-hamburger-btn .h-bar:nth-child(1) {
+    transform: translateY(6px) rotate(45deg);
+}
+
+.mh-menu-wrap.open .mh-hamburger-btn .h-bar:nth-child(2) {
+    opacity: 0;
+}
+
+.mh-menu-wrap.open .mh-hamburger-btn .h-bar:nth-child(3) {
+    transform: translateY(-6px) rotate(-45deg);
+}
+
+/* Liquid Glass Dropdown Menu */
+.mh-dropdown {
+    position: absolute;
+    top: calc(100% + 10px);
+    right: 0;
+    width: 224px;
+    border-radius: 20px;
+    padding: 8px;
+    background: rgba(var(--bgc), 0.78);
+    backdrop-filter: blur(28px) saturate(190%);
+    -webkit-backdrop-filter: blur(28px) saturate(190%);
+    border: 1px solid rgba(var(--ink), 0.14);
+    box-shadow: 0 16px 40px rgba(var(--shadow), 0.22), inset 0 1px 0 rgba(255, 255, 255, 0.25);
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    z-index: 100;
+    transform-origin: top right;
+    animation: dropPop 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.mh-dropdown[hidden] {
+    display: none !important;
+}
+
+@keyframes dropPop {
+    0% {
+        opacity: 0;
+        transform: scale(0.92) translateY(-6px);
+    }
+    100% {
+        opacity: 1;
+        transform: scale(1) translateY(0);
+    }
+}
+
+.mh-drop-item {
+    width: 100%;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 10px 14px;
+    border-radius: 12px;
+    border: none;
+    background: transparent;
+    color: var(--fg);
+    font-size: 13px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: background 0.15s ease;
+    box-sizing: border-box;
+}
+
+.mh-drop-item:active,
+.mh-drop-item:hover {
+    background: rgba(var(--ink), 0.06);
+}
+
+.mh-drop-item.ver-row {
+    cursor: default;
+}
+
+.mh-drop-item.ver-row:hover {
+    background: transparent;
+}
+
+.mh-drop-item.action {
+    color: var(--fg);
+}
+
+.mh-item-left {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+
+.mh-item-left svg {
+    flex-shrink: 0;
+    opacity: 0.85;
+}
+
+.mh-item-val {
+    font-size: 12px;
+    font-weight: 700;
+    color: var(--mut);
+}
+
+.mh-item-val.version-tag {
+    font-size: 11px;
+    padding: 2px 7px;
+    border-radius: 999px;
+    background: rgba(var(--ink), 0.08);
+    font-variant-numeric: tabular-nums;
+}
+
+.mh-drop-divider {
+    height: 1px;
+    width: 100%;
+    background: rgba(var(--ink), 0.08);
+    margin: 4px 0;
 }
 
 .mh-hero {
@@ -1487,7 +1615,8 @@ body.in-game .mobile-home,
     color: var(--bg);
 }
 
-.mh-card.glass .mh-card-icon {
+.mh-card.glass .mh-card-icon,
+.mh-vs-play .mh-card-icon {
     background: rgba(var(--ink), 0.08);
     color: var(--fg);
 }
@@ -1521,20 +1650,6 @@ body.in-game .mobile-home,
     text-overflow: ellipsis;
 }
 
-.mh-badge-pill {
-    font-size: 9.5px;
-    font-weight: 800;
-    letter-spacing: 0.06em;
-    padding: 2px 7px;
-    border-radius: 999px;
-    text-transform: uppercase;
-}
-
-.mh-card.glass .mh-badge-pill {
-    background: var(--fg);
-    color: var(--bg);
-}
-
 .mh-card-arrow {
     width: 24px;
     height: 24px;
@@ -1544,16 +1659,42 @@ body.in-game .mobile-home,
     flex-shrink: 0;
 }
 
-.mh-diff-box {
+/* Redesigned Unified VS AI Card */
+.mh-vs-card {
     width: 100%;
+    border-radius: 22px;
+    background: rgba(var(--ink), 0.04);
+    border: 1px solid rgba(var(--ink), 0.1);
+    box-shadow: 0 8px 24px rgba(var(--shadow), 0.08);
     display: flex;
     flex-direction: column;
-    gap: 9px;
-    padding: 13px 15px;
-    border-radius: 20px;
-    background: rgba(var(--ink), 0.04);
-    border: 1px solid rgba(var(--ink), 0.08);
-    box-sizing: border-box;
+    overflow: hidden;
+    transition: transform 0.15s ease, box-shadow 0.2s ease;
+}
+
+.mh-vs-play {
+    width: 100%;
+    padding: 15px 18px;
+    border: none;
+    background: transparent;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    gap: 14px;
+    text-align: left;
+    color: var(--fg);
+    transition: background 0.15s ease;
+}
+
+.mh-vs-play:active {
+    background: rgba(var(--ink), 0.05);
+}
+
+.mh-vs-diff-section {
+    padding: 0 14px 14px;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
 }
 
 .mh-diff-top {
@@ -1583,47 +1724,87 @@ body.in-game .mobile-home,
     text-overflow: ellipsis;
 }
 
-.mh-diff-box .lvl {
+.mh-vs-diff-section .lvl {
     width: 100%;
     display: flex;
     box-sizing: border-box;
-    padding: 4px;
+    padding: 3px;
+    background: rgba(var(--ink), 0.05);
 }
 
-.mh-diff-box .lvl button {
+.mh-vs-diff-section .lvl button {
     flex: 1;
     text-align: center;
-    padding: 9px 0;
+    padding: 8px 0;
     font-size: 12.5px;
     font-weight: 700;
 }
 
-.mh-foot {
+.mh-footer-tag {
+    font-size: 10px;
+    font-weight: 800;
+    letter-spacing: 0.18em;
+    color: var(--mut);
+    opacity: 0.45;
+    padding-bottom: 4px;
+    text-align: center;
+}
+
+/* OTA Update Banner */
+.ota-banner {
+    position: fixed;
+    bottom: max(20px, env(safe-area-inset-bottom));
+    left: 20px;
+    right: 20px;
+    max-width: 400px;
+    margin: 0 auto;
+    border-radius: 20px;
+    padding: 14px 18px;
     display: flex;
     align-items: center;
-    justify-content: center;
+    justify-content: space-between;
     gap: 12px;
-    width: 100%;
-    padding-bottom: 2px;
+    background: rgba(var(--bgc), 0.88);
+    backdrop-filter: blur(28px) saturate(190%);
+    -webkit-backdrop-filter: blur(28px) saturate(190%);
+    border: 1px solid rgba(var(--ink), 0.15);
+    box-shadow: 0 16px 40px rgba(var(--shadow), 0.3);
+    z-index: 999;
+    animation: otaSlideUp 0.35s cubic-bezier(0.16, 1, 0.3, 1);
 }
 
-.mh-tool-btn {
-    display: inline-flex;
-    align-items: center;
-    gap: 8px;
-    padding: 9px 16px;
-    border-radius: 999px;
-    font-size: 12px;
-    font-weight: 700;
+@keyframes otaSlideUp {
+    0% { transform: translateY(60px); opacity: 0; }
+    100% { transform: translateY(0); opacity: 1; }
+}
+
+.ota-content {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+}
+
+.ota-title {
+    font-size: 13.5px;
+    font-weight: 800;
     color: var(--fg);
-    background: rgba(var(--ink), 0.04);
-    border: 1px solid rgba(var(--ink), 0.08);
-    cursor: pointer;
-    transition: transform 0.15s ease, background 0.2s ease;
 }
 
-.mh-tool-btn:active {
-    transform: scale(0.95);
+.ota-desc {
+    font-size: 11px;
+    color: var(--mut);
+}
+
+.ota-btn {
+    padding: 8px 16px;
+    border-radius: 999px;
+    border: none;
+    background: var(--fg);
+    color: var(--bg);
+    font-size: 12px;
+    font-weight: 800;
+    cursor: pointer;
+    flex-shrink: 0;
 }
 
 @media(max-width:760px) {

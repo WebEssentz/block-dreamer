@@ -2,7 +2,7 @@ import os
 import math
 from PIL import Image, ImageDraw, ImageFont
 
-def render_logo(size):
+def render_logo(size, high_contrast=False):
     # Renders logo mark with transparent background at (size x size)
     # 4x supersampling
     scale = 4
@@ -10,11 +10,6 @@ def render_logo(size):
     img = Image.new('RGBA', (s, s), (0, 0, 0, 0))
     draw = ImageDraw.Draw(img)
 
-    # 4 blocks in 64x64 virtual coordinate space:
-    # 6,6 (26x26, rx=8) -> solid
-    # 32,6 (26x26, rx=8) -> glass outline
-    # 6,32 (26x26, rx=8) -> glass outline
-    # 32,32 (26x26, rx=8) -> solid
     k = s / 64.0
 
     def draw_rounded_rect(xy, rx, fill=None, outline=None, width=1):
@@ -22,9 +17,17 @@ def render_logo(size):
         draw.rounded_rectangle([x0, y0, x1, y1], radius=rx, fill=fill, outline=outline, width=width)
 
     # Glass blocks (top-right, bottom-left)
-    glass_fill = (255, 255, 255, 28)
-    glass_outline = (255, 255, 255, 80)
-    w_out = max(2, int(1.5 * k))
+    if high_contrast:
+        glass_fill = (255, 255, 255, 55)
+        glass_outline = (255, 255, 255, 180)
+        solid_fill = (255, 255, 255, 255)
+        w_out = max(2, int(2.2 * k))
+    else:
+        glass_fill = (255, 255, 255, 30)
+        glass_outline = (255, 255, 255, 90)
+        solid_fill = (245, 245, 247, 255)
+        w_out = max(2, int(1.5 * k))
+
     rx = int(8 * k)
 
     # Top-right
@@ -33,19 +36,17 @@ def render_logo(size):
     draw_rounded_rect([6*k, 32*k, 32*k, 58*k], rx, fill=glass_fill, outline=glass_outline, width=w_out)
 
     # Solid blocks (top-left, bottom-right)
-    solid_fill = (240, 240, 242, 255)
     # Top-left
     draw_rounded_rect([6*k, 6*k, 32*k, 32*k], rx, fill=solid_fill)
     # Bottom-right
     draw_rounded_rect([32*k, 32*k, 58*k, 58*k], rx, fill=solid_fill)
 
     # Highlight stripes on solid blocks
-    hi_fill = (255, 255, 255, 90)
+    hi_fill = (255, 255, 255, 140 if high_contrast else 90)
     hi_rx = max(1, int(2 * k))
     draw_rounded_rect([10*k, 9*k, 28*k, 13*k], hi_rx, fill=hi_fill)
     draw_rounded_rect([36*k, 35*k, 54*k, 39*k], hi_rx, fill=hi_fill)
 
-    # Downsample
     return img.resize((size, size), Image.Resampling.LANCZOS)
 
 def create_splash(width, height):
@@ -119,16 +120,14 @@ def create_app_icon(size):
     img = Image.new('RGBA', (s, s), (0, 0, 0, 0))
     draw = ImageDraw.Draw(img)
 
-    # Squircle background
+    # Squircle background (#161618 deep charcoal)
     rx = int(s * 0.22)
-    # Background gradient / rich onyx
-    draw.rounded_rectangle([0, 0, s - 1, s - 1], radius=rx, fill=(18, 18, 17, 255))
-    # Subtle inner border
-    draw.rounded_rectangle([1, 1, s - 2, s - 2], radius=rx, outline=(255, 255, 255, 30), width=max(1, int(1.5 * scale)))
+    draw.rounded_rectangle([0, 0, s - 1, s - 1], radius=rx, fill=(22, 22, 24, 255))
+    draw.rounded_rectangle([1, 1, s - 2, s - 2], radius=rx, outline=(255, 255, 255, 38), width=max(1, int(1.5 * scale)))
 
-    # Emblem
+    # Emblem (high contrast)
     logo_sz = int(s * 0.62)
-    logo = render_logo(logo_sz)
+    logo = render_logo(logo_sz, high_contrast=True)
     img.alpha_composite(logo, ((s - logo_sz) // 2, (s - logo_sz) // 2))
 
     return img.resize((size, size), Image.Resampling.LANCZOS)
@@ -139,13 +138,13 @@ def create_app_icon_round(size):
     img = Image.new('RGBA', (s, s), (0, 0, 0, 0))
     draw = ImageDraw.Draw(img)
 
-    # Circle background
-    draw.ellipse([0, 0, s - 1, s - 1], fill=(18, 18, 17, 255))
-    draw.ellipse([1, 1, s - 2, s - 2], outline=(255, 255, 255, 30), width=max(1, int(1.5 * scale)))
+    # Circle background (#161618)
+    draw.ellipse([0, 0, s - 1, s - 1], fill=(22, 22, 24, 255))
+    draw.ellipse([1, 1, s - 2, s - 2], outline=(255, 255, 255, 38), width=max(1, int(1.5 * scale)))
 
-    # Emblem
+    # Emblem (high contrast)
     logo_sz = int(s * 0.58)
-    logo = render_logo(logo_sz)
+    logo = render_logo(logo_sz, high_contrast=True)
     img.alpha_composite(logo, ((s - logo_sz) // 2, (s - logo_sz) // 2))
 
     return img.resize((size, size), Image.Resampling.LANCZOS)
@@ -156,9 +155,9 @@ def create_foreground_icon(size):
     s = size * scale
     img = Image.new('RGBA', (s, s), (0, 0, 0, 0))
     
-    # Emblem centered in the safe zone (middle 66%)
-    logo_sz = int(s * 0.44)
-    logo = render_logo(logo_sz)
+    # Emblem centered in the safe zone (around 52% of canvas to fit comfortably inside all launcher masks)
+    logo_sz = int(s * 0.52)
+    logo = render_logo(logo_sz, high_contrast=True)
     img.alpha_composite(logo, ((s - logo_sz) // 2, (s - logo_sz) // 2))
 
     return img.resize((size, size), Image.Resampling.LANCZOS)

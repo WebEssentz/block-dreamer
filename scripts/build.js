@@ -31,6 +31,23 @@ for (const f of ortFiles) {
   }
 }
 
+// Update version.json
+try {
+  const { execSync } = require('child_process');
+  let commit = '';
+  try { commit = execSync('git rev-parse --short HEAD', { cwd: root }).toString().trim(); } catch (_) {}
+  const verData = {
+    version: '1.0.1',
+    commit: commit || 'latest',
+    timestamp: Date.now(),
+    releaseUrl: 'https://github.com/WebEssentz/block-dreamer/releases/tag/latest-apk',
+    apkUrl: 'https://github.com/WebEssentz/block-dreamer/releases/download/latest-apk/app-debug.apk'
+  };
+  fs.writeFileSync(path.join(root, 'version.json'), JSON.stringify(verData, null, 2));
+} catch (e) {
+  console.warn('Could not auto-generate version.json', e.message);
+}
+
 // Copy game root files
 const gameFiles = [
   'index.html',
@@ -38,6 +55,8 @@ const gameFiles = [
   'app.js',
   'engine.js',
   'ai-worker.js',
+  'updater.js',
+  'version.json',
   'model.onnx',
   'model.json',
   'me.jpg'
