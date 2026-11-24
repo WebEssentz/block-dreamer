@@ -17,72 +17,23 @@
           (matchMedia('(prefers-color-scheme: light)').matches ? 'light' : 'dark');
         document.documentElement.setAttribute('data-theme', t);
       } catch (e) { document.documentElement.setAttribute('data-theme', 'dark'); }
-
-      window.__BD_OTA_ACTIVE__ = false;
-      function clearOta() {
-        try {
-          localStorage.removeItem('bd_live_html');
-          localStorage.removeItem('bd_live_css');
-          localStorage.removeItem('bd_live_engine');
-          localStorage.removeItem('bd_live_js');
-          localStorage.removeItem('bd_live_updater');
-          localStorage.removeItem('bd_ota_fail');
-        } catch (_) {}
-      }
-      window.__BD_CLEAR_OTA__ = clearOta;
-
+      // Clear any legacy web-OTA cache keys from earlier builds
       try {
-        var bundled = window.__BD_BUNDLED__ || null;
-        var verRaw = localStorage.getItem('bd_version');
-        var stored = verRaw ? JSON.parse(verRaw) : null;
-
-        if (bundled && (!stored || !stored.timestamp || stored.timestamp <= bundled.timestamp)) {
-          clearOta();
-          localStorage.setItem('bd_version', JSON.stringify(bundled));
-          stored = bundled;
-        }
-
-        var failCount = parseInt(localStorage.getItem('bd_ota_fail') || '0', 10);
-        if (failCount >= 2) {
-          clearOta();
-          if (bundled) localStorage.setItem('bd_version', JSON.stringify(bundled));
-        } else if (stored && (!bundled || stored.timestamp > bundled.timestamp)) {
-          var liveHtml = localStorage.getItem('bd_live_html');
-          var liveCss = localStorage.getItem('bd_live_css');
-          var liveJs = localStorage.getItem('bd_live_js');
-          if (liveHtml && liveCss && liveJs) {
-            window.__BD_OTA_ACTIVE__ = true;
-            localStorage.setItem('bd_ota_fail', String(failCount + 1));
-          } else {
-            clearOta();
-            if (bundled) localStorage.setItem('bd_version', JSON.stringify(bundled));
-          }
-        }
+        ['bd_live_html', 'bd_live_css', 'bd_live_engine', 'bd_live_js', 'bd_live_updater', 'bd_ota_fail', 'bd_version']
+          .forEach(function (k) { localStorage.removeItem(k); });
       } catch (_) {}
-
-      if (window.__BD_OTA_ACTIVE__) {
-        try {
-          var s = document.createElement('style');
-          s.id = 'bd-live-css';
-          s.textContent = localStorage.getItem('bd_live_css');
-          document.head.appendChild(s);
-          return;
-        } catch (_) { window.__BD_OTA_ACTIVE__ = false; }
-      }
-      document.write('<link rel="stylesheet" href="style.css?v=20261023e">');
     })();
   </script>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
-  <noscript><link rel="stylesheet" href="style.css?v=20261023e"></noscript>
+  <link rel="stylesheet" href="style.css?v=20261023e">
   <!-- anonymous, cookie-free visit counter (no personal data) -->
   <script data-goatcounter="https://block-dreamer.goatcounter.com/count"
           async src="//gc.zgo.at/count.js"></script>
 </head>
 
 <body>
-  <div id="bdAppRoot" style="display:contents"><!-- BD_UI_START -->
 
   <div id="loader" aria-hidden="true">
     <div class="ld-blocks"><i></i><i></i><i></i><i></i></div>
@@ -768,33 +719,6 @@
     <div class="iris-mark"><i></i><i></i><i></i><i></i></div>
   </div>
   <div id="toast" role="status"></div>
-  <!-- BD_UI_END --></div>
-
-  <script>
-    (function () {
-      if (window.__BD_OTA_ACTIVE__) {
-        try {
-          var liveHtml = localStorage.getItem('bd_live_html');
-          var rootEl = document.getElementById('bdAppRoot');
-          if (liveHtml && rootEl) rootEl.innerHTML = liveHtml;
-        } catch (e) { console.warn('OTA HTML swap failed:', e); }
-      }
-      window.__BD_LOAD_SCRIPT__ = function (key, label) {
-        if (!window.__BD_OTA_ACTIVE__) return false;
-        try {
-          var code = localStorage.getItem(key);
-          if (!code) return false;
-          var s = document.createElement('script');
-          s.textContent = code + '\n//# sourceURL=' + label + '-ota.js';
-          document.body.appendChild(s);
-          return true;
-        } catch (e) {
-          console.error('OTA script load error for ' + key, e);
-          return false;
-        }
-      };
-    })();
-  </script>
 
   <script>
     (function () {
@@ -833,17 +757,9 @@
       }
     })();
   </script>
-  <script>if (!window.__BD_LOAD_SCRIPT__('bd_live_engine', 'engine.js')) document.write('<script src="engine.js?v=20261023e"><\/script>');</script>
-  <script>if (!window.__BD_LOAD_SCRIPT__('bd_live_updater', 'updater.js')) document.write('<script src="updater.js"><\/script>');</script>
-  <script>if (!window.__BD_LOAD_SCRIPT__('bd_live_js', 'app.js')) document.write('<script src="app.js?v=20261023e"><\/script>');</script>
-  <script>
-    if (window.__BD_BOOT_OK__) {
-      try { localStorage.removeItem('bd_ota_fail'); } catch (_) {}
-    } else if (window.__BD_OTA_ACTIVE__) {
-      if (window.__BD_CLEAR_OTA__) window.__BD_CLEAR_OTA__();
-      location.reload();
-    }
-  </script>
+  <script src="engine.js?v=20261023e"></script>
+  <script src="updater.js"></script>
+  <script src="app.js?v=20261023e"></script>
 </body>
 
 </html>

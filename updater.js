@@ -1,36 +1,61 @@
-// Live OTA (Over-The-Air) Updater for Block Dreamer
-// Checks GitHub for updates when online and syncs web bundle automatically.
+// Native Android APK Self-Updater for Block Dreamer
+// Checks GitHub Releases (`latest-apk`), downloads the signed APK in-app,
+// and launches Android's native system installer to replace the app cleanly.
 
 const UPDATER_REPO = 'WebEssentz/block-dreamer';
-const UPDATER_BRANCH = 'mobile-app';
-const BRANCH_API = `https://api.github.com/repos/${UPDATER_REPO}/branches/${UPDATER_BRANCH}`;
-const RAW_BASE = `https://raw.githubusercontent.com/${UPDATER_REPO}/${UPDATER_BRANCH}/`;
+const RELEASE_API = `https://api.github.com/repos/${UPDATER_REPO}/releases/tags/latest-apk`;
+const DEFAULT_APK_URL = `https://github.com/${UPDATER_REPO}/releases/download/latest-apk/app-debug.apk`;
+
+function parseSemver(v) {
+  const m = String(v || '').match(/(\d+)\.(\d+)\.(\d+)/);
+  return m ? [Number(m[1]), Number(m[2]), Number(m[3])] : null;
+}
+
+function compareSemver(a, b) {
+  const pa = parseSemver(a), pb = parseSemver(b);
+  if (!pa || !pb) return 0;
+  for (let i = 0; i < 3; i++) {
+    if (pa[i] !== pb[i]) return pa[i] > pb[i] ? 1 : -1;
+  }
+  return 0;
+}
 
 const Updater = {
-  currentVersion: '1.0.1',
-  currentCommit: '',
-  currentTimestamp: 0,
+  currentVersion: '1.0.4',
   checking: false,
-  downloadedReady: false,
+  installing: false,
+  available: null,
+
+  getPlugin() {
+    return window.Capacitor && window.Capacitor.Plugins && window.Capacitor.Plugins.AppUpdater
+      ? window.Capacitor.Plugins.AppUpdater
+      : null;
+  },
 
   async init() {
-    try {
-      const bundled = window.__BD_BUNDLED__ || null;
-      const storedRaw = localStorage.getItem('bd_version');
-      const stored = storedRaw ? JSON.parse(storedRaw) : null;
-      const baseline = (stored && stored.timestamp) ? stored : bundled;
+    const bundled = window.__BD_BUNDLED__ || null;
+    if (bundled && bundled.version) {
+      this.currentVersion = bundled.version;
+    }
 
-      if (baseline) {
-        this.currentVersion = baseline.version || this.currentVersion;
-        this.currentCommit = baseline.commit || '';
-        this.currentTimestamp = baseline.timestamp || 0;
-      }
-    } catch (_) {}
+    const plugin = this.getPlugin();
+    if (plugin) {
+      try {
+        const info = await plugin.getInstalledVersion();
+        if (info && info.version) this.currentVersion = info.version;
+      } catch (_) {}
+
+      try {
+        plugin.addListener('downloadProgress', (ev) => {
+          this.onProgress(ev);
+        });
+      } catch (_) {}
+    }
 
     this.updateUI();
 
     if (navigator.onLine) {
-      setTimeout(() => this.check(false), 3000);
+      setTimeout(() => this.check(false), 2500);
     } else {
       window.addEventListener('online', () => {
         setTimeout(() => this.check(false), 1000);
@@ -52,27 +77,30 @@ const Updater = {
     }
   },
 
-  async resolveRemoteBase() {
-    try {
-      const bRes = await fetch(BRANCH_API, {
-        cache: 'no-store',
-        headers: { 'Accept': 'application/vnd.github+json' }
-      });
-      if (bRes.ok) {
-        const bData = await bRes.json();
-        const sha = bData && bData.commit && bData.commit.sha;
-        if (sha) return `https://raw.githubusercontent.com/${UPDATER_REPO}/${sha}/`;
-      }
-    } catch (_) {}
-    return RAW_BASE;
+  onProgress(ev) {
+    if (!ev) return;
+    const pct = typeof ev.progress === 'number' && ev.progress >= 0 ? ev.progress : null;
+    const mb = ev.downloaded ? (ev.downloaded / 1048576).toFixed(1) : '0.0';
+    const totalMb = ev.total > 0 ? (ev.total / 1048576).toFixed(1) : null;
+    const label = pct !== null ? `Downloading ${pct}%` : `Downloading ${mb} MB`;
+
+    this.updateUI(label, label);
+    const bar = document.querySelector('.ota-progress i');
+    if (bar && pct !== null) bar.style.width = `${pct}%`;
+    const desc = document.querySelector('.ota-desc');
+    if (desc) desc.textContent = totalMb ? `${mb} / ${totalMb} MB` : `${mb} MB downloaded`;
+    const btn = document.querySelector('.ota-btn');
+    if (btn) btn.textContent = pct !== null ? `${pct}%` : '…';
   },
 
   async check(manual = false) {
-    if (this.downloadedReady) {
-      window.location.reload();
+    if (this.installing) return;
+    if (this.available) {
+      await this.installUpdate();
       return;
     }
     if (this.checking) return;
+
     if (!navigator.onLine) {
       this.updateUI('Offline', 'Check for Update');
       if (manual) this.toast('Offline. Will check automatically when online.');
@@ -85,29 +113,38 @@ const Updater = {
     this.checking = true;
     const spin = document.getElementById('mhUpdateSpinIco');
     if (spin) spin.style.animation = 'spin 1s linear infinite';
-    this.updateUI('Checking updates...', 'Checking...');
+    this.updateUI('Checking...', 'Checking...');
 
     try {
-      const base = await this.resolveRemoteBase();
-      const res = await fetch(`${base}version.json?_t=${Date.now()}`, { cache: 'no-store' });
-      if (!res.ok) throw new Error('Network error');
-      const remote = await res.json();
+      const res = await fetch(`${RELEASE_API}?_t=${Date.now()}`, {
+        cache: 'no-store',
+        headers: { 'Accept': 'application/vnd.github+json' }
+      });
+      if (!res.ok) throw new Error(`GitHub ${res.status}`);
+      const rel = await res.json();
 
-      const localTs = this.getLocalTimestamp();
-      const bundledTs = (window.__BD_BUNDLED__ && Number(window.__BD_BUNDLED__.timestamp)) || 0;
-      const missingHtml = localTs > bundledTs && !localStorage.getItem('bd_live_html');
-      const hasUpdate = !!(remote.timestamp && Number(remote.timestamp) > localTs) || missingHtml;
+      const m = String(rel.name || '').match(/v?(\d+\.\d+\.\d+)/);
+      const remoteVersion = m ? m[1] : null;
+      const asset = Array.isArray(rel.assets)
+        ? rel.assets.find(a => a && a.name && a.name.endsWith('.apk'))
+        : null;
+      const apkUrl = (asset && asset.browser_download_url) || DEFAULT_APK_URL;
+      const sizeMb = asset && asset.size ? (asset.size / 1048576).toFixed(1) : null;
 
-      if (hasUpdate) {
-        this.updateUI('Downloading update...', 'Downloading...');
-        await this.downloadUpdate(remote, base);
+      if (remoteVersion && compareSemver(remoteVersion, this.currentVersion) > 0) {
+        this.available = { version: remoteVersion, url: apkUrl, sizeMb };
+        this.updateUI(`Update v${remoteVersion}`, `Install v${remoteVersion}`);
+        this.showUpdateBanner();
+        if (manual) this.toast(`v${remoteVersion} available — tap Install.`);
       } else {
-        this.updateUI('App up to date', 'Up to Date');
+        this.updateUI('Up to date', 'Up to Date');
         if (manual) this.toast(`v${this.currentVersion} is up to date.`);
-        setTimeout(() => this.updateUI(null, 'Check for Update'), 2500);
+        setTimeout(() => {
+          if (!this.available && !this.installing) this.updateUI('Check for Updates', 'Check for Update');
+        }, 2500);
       }
     } catch (err) {
-      console.warn('OTA check failed:', err);
+      console.warn('Update check failed:', err);
       this.updateUI('Check for Updates', 'Check for Update');
       if (manual) this.toast('Could not reach GitHub.');
     } finally {
@@ -116,92 +153,82 @@ const Updater = {
     }
   },
 
-  getLocalTimestamp() {
-    try {
-      const s = localStorage.getItem('bd_version');
-      const storedTs = s ? (Number(JSON.parse(s).timestamp) || 0) : 0;
-      const bundledTs = (window.__BD_BUNDLED__ && Number(window.__BD_BUNDLED__.timestamp)) || 0;
-      return Math.max(storedTs, bundledTs, this.currentTimestamp || 0);
-    } catch (_) {
-      return this.currentTimestamp || 0;
+  async installUpdate() {
+    if (!this.available || this.installing) return;
+    const plugin = this.getPlugin();
+    if (!plugin) {
+      window.open(this.available.url, '_blank', 'noopener');
+      return;
     }
-  },
 
-  async downloadUpdate(remote, base = RAW_BASE) {
+    this.installing = true;
+    const btn = document.querySelector('.ota-btn');
+    if (btn) btn.disabled = true;
+    this.updateUI('Starting download...', 'Starting...');
+
     try {
-      const q = `?_t=${Date.now()}`;
-      const [htmlRes, cssRes, engineRes, updaterRes, jsRes] = await Promise.all([
-        fetch(`${base}index.html${q}`, { cache: 'no-store' }),
-        fetch(`${base}style.css${q}`, { cache: 'no-store' }),
-        fetch(`${base}engine.js${q}`, { cache: 'no-store' }),
-        fetch(`${base}updater.js${q}`, { cache: 'no-store' }),
-        fetch(`${base}app.js${q}`, { cache: 'no-store' })
-      ]);
+      const res = await plugin.downloadAndInstall({
+        url: this.available.url,
+        version: this.available.version
+      });
 
-      if (!htmlRes.ok || !cssRes.ok || !engineRes.ok || !updaterRes.ok || !jsRes.ok) {
-        throw new Error('Asset download failed');
+      if (res && res.needsPermission) {
+        this.installing = false;
+        if (btn) {
+          btn.disabled = false;
+          btn.textContent = 'Install';
+        }
+        this.updateUI(`Update v${this.available.version}`, `Install v${this.available.version}`);
+        this.toast('Allow "Install unknown apps", then return here.');
+
+        const onReturn = async () => {
+          if (document.hidden) return;
+          document.removeEventListener('visibilitychange', onReturn);
+          try {
+            const p = await plugin.canInstallPackages();
+            if (p && p.allowed && this.available) this.installUpdate();
+          } catch (_) {}
+        };
+        document.addEventListener('visibilitychange', onReturn);
+        return;
       }
 
-      const [html, css, engine, updaterJs, js] = await Promise.all([
-        htmlRes.text(),
-        cssRes.text(),
-        engineRes.text(),
-        updaterRes.text(),
-        jsRes.text()
-      ]);
-
-      const startTag = '<!-- BD_UI_START -->';
-      const endTag = '<!-- BD_UI_END -->';
-      const sIdx = html.indexOf(startTag);
-      const eIdx = html.indexOf(endTag);
-      const uiHtml = (sIdx !== -1 && eIdx !== -1 && eIdx > sIdx)
-        ? html.slice(sIdx + startTag.length, eIdx)
-        : '';
-
-      if (css.length < 5000 || js.length < 5000 || engine.length < 1000 ||
-          updaterJs.length < 500 || !uiHtml.includes('id="mobileHome"') || !uiHtml.includes('id="game"')) {
-        throw new Error('Downloaded OTA bundle failed integrity validation');
+      this.installing = false;
+      this.updateUI(`Install v${this.available.version}`, `Install v${this.available.version}`);
+      if (btn) {
+        btn.disabled = false;
+        btn.textContent = 'Install';
       }
-
-      localStorage.setItem('bd_live_html', uiHtml);
-      localStorage.setItem('bd_live_css', css);
-      localStorage.setItem('bd_live_engine', engine);
-      localStorage.setItem('bd_live_updater', updaterJs);
-      localStorage.setItem('bd_live_js', js);
-      localStorage.removeItem('bd_ota_fail');
-      localStorage.setItem('bd_version', JSON.stringify({
-        version: remote.version || this.currentVersion,
-        commit: remote.commit || '',
-        timestamp: Number(remote.timestamp) || Date.now()
-      }));
-
-      this.currentVersion = remote.version || this.currentVersion;
-      this.currentCommit = remote.commit || '';
-      this.currentTimestamp = Number(remote.timestamp) || Date.now();
-      this.downloadedReady = true;
-      this.updateUI(`v${this.currentVersion} ready`, 'Restart to Apply');
-      this.toast(`v${this.currentVersion} ready — tap Restart.`);
-      this.promptRestart();
     } catch (err) {
-      console.error('Failed to download update:', err);
-      this.updateUI('Update failed', 'Retry');
-      this.toast('Update download failed.');
+      console.error('APK update failed:', err);
+      this.installing = false;
+      if (btn) {
+        btn.disabled = false;
+        btn.textContent = 'Retry';
+      }
+      this.updateUI('Update failed', 'Retry Install');
+      this.toast('Download failed. Check connection and retry.');
     }
   },
 
-  promptRestart() {
-    if (document.querySelector('.ota-banner')) return;
+  showUpdateBanner() {
+    if (!this.available) return;
+    const old = document.querySelector('.ota-banner');
+    if (old) old.remove();
+
     const banner = document.createElement('div');
     banner.className = 'ota-banner glass';
+    const sizeText = this.available.sizeMb ? `${this.available.sizeMb} MB · ` : '';
     banner.innerHTML = `
       <div class="ota-content">
-        <span class="ota-title">✨ Update Ready</span>
-        <span class="ota-desc">Restart now to apply v${this.currentVersion}</span>
+        <span class="ota-title">Update Ready · v${this.available.version}</span>
+        <span class="ota-desc">${sizeText}Downloads and updates in-app</span>
       </div>
-      <button class="ota-btn" type="button">Restart</button>
+      <button class="ota-btn" type="button">Install</button>
+      <div class="ota-progress" aria-hidden="true"><i></i></div>
     `;
-    banner.querySelector('button').addEventListener('click', () => {
-      window.location.reload();
+    banner.querySelector('.ota-btn').addEventListener('click', () => {
+      this.installUpdate();
     });
     document.body.appendChild(banner);
   },

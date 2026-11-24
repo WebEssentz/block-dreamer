@@ -1807,6 +1807,30 @@ body.in-game .mobile-home,
     flex-shrink: 0;
 }
 
+.ota-btn:disabled {
+    opacity: 0.72;
+    cursor: default;
+}
+
+.ota-progress {
+    position: absolute;
+    left: 14px;
+    right: 14px;
+    bottom: 0;
+    height: 2.5px;
+    border-radius: 999px;
+    overflow: hidden;
+    background: transparent;
+}
+
+.ota-progress i {
+    display: block;
+    width: 0%;
+    height: 100%;
+    background: var(--hot);
+    transition: width 0.14s linear;
+}
+
 @media(max-width:760px) {
     .arena.vs {
         flex-direction: column;

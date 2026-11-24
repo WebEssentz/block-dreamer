@@ -1,14 +1,32 @@
+import groovy.json.JsonSlurper
+
 apply plugin: 'com.android.application'
+
+def verFile = file('../../version.json')
+def verJson = verFile.exists() ? new JsonSlurper().parseText(verFile.text) : [:]
+def appVersionName = (verJson.version ?: '1.0.4').toString()
+def appVersionParts = appVersionName.tokenize('.').collect { it.isInteger() ? it.toInteger() : 0 }
+def appVersionCode = appVersionParts.size() == 3
+    ? (appVersionParts[0] * 10000 + appVersionParts[1] * 100 + appVersionParts[2])
+    : 10004
 
 android {
     namespace "com.blockdreamer.app"
     compileSdk rootProject.ext.compileSdkVersion
+    signingConfigs {
+        debug {
+            storeFile file('debug.keystore')
+            storePassword 'android'
+            keyAlias 'androiddebugkey'
+            keyPassword 'android'
+        }
+    }
     defaultConfig {
         applicationId "com.blockdreamer.app"
         minSdkVersion rootProject.ext.minSdkVersion
         targetSdkVersion rootProject.ext.targetSdkVersion
-        versionCode 1
-        versionName "1.0"
+        versionCode appVersionCode
+        versionName appVersionName
         testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"
         aaptOptions {
              // Files and dirs to omit from the packaged assets dir, modified to accommodate modern web apps.
@@ -17,6 +35,9 @@ android {
         }
     }
     buildTypes {
+        debug {
+            signingConfig signingConfigs.debug
+        }
         release {
             minifyEnabled false
             proguardFiles getDefaultProguardFile('proguard-android.txt'), 'proguard-rules.pro'
