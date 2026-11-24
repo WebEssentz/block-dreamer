@@ -937,7 +937,11 @@ async function enterGame(mode, x, y) {
   await irisIn(x, y);
   savedScroll = scrollY; M.mode = mode;
   if (!pick.hidden) { closePick(true); if (pickPushed) { pickPushed = false; history.replaceState(null, ''); } }
-  const mh = $('#mobileHome'); if (mh) mh.hidden = true;
+  const mh = $('#mobileHome');
+  if (mh) {
+    mh.hidden = true;
+    mh.style.display = 'none';
+  }
   $('#landing').style.display = 'none'; document.body.classList.add('in-game');
   $('#game').hidden = false; buildArena(mode); newGames(seed);
   if (!M.raf) { M.last = performance.now(); M.raf = requestAnimationFrame(frame); }
@@ -954,7 +958,9 @@ async function exitGame() {
     const mh = $('#mobileHome');
     if (mh) {
       mh.hidden = false;
+      mh.style.display = 'flex';
       const b = $('#mhBestScore'); if (b) b.textContent = (Stats.d.best || 0).toLocaleString();
+      if (typeof placePills === 'function') setTimeout(placePills, 50);
     }
   } else {
     $('#landing').style.display = ''; window.scrollTo(0, savedScroll);
@@ -1509,12 +1515,20 @@ void main(){
   (document.fonts && document.fonts.load ? document.fonts.load('800 80px Inter').catch(() => {}) : Promise.resolve()).then(() => { fontsOk = true; size(); window.__heroGo = go; });
 }
 /* loader & startup */
-function hideLoader() { $('#loader').classList.add('done'); if (window.__heroGo) window.__heroGo(); else setTimeout(() => window.__heroGo && window.__heroGo(), 200); }
+function hideLoader() {
+  $('#loader').classList.add('done');
+  if (window.Capacitor && window.Capacitor.Plugins && window.Capacitor.Plugins.SplashScreen) {
+    try { window.Capacitor.Plugins.SplashScreen.hide({ fadeOutDuration: 300 }); } catch (_) {}
+  }
+  if (window.__heroGo) window.__heroGo();
+  else setTimeout(() => window.__heroGo && window.__heroGo(), 200);
+}
 
 function initMobileHome() {
   const mh = $('#mobileHome');
   if (!mh) return;
   mh.hidden = false;
+  mh.style.display = 'flex';
   const b = $('#mhBestScore');
   if (b) b.textContent = (Stats.d.best || 0).toLocaleString();
 
@@ -1535,6 +1549,8 @@ function initMobileHome() {
       Haptics.vibrate('selection');
       $('#mhIcoOn').style.display = Sfx.on ? '' : 'none';
       $('#mhIcoOff').style.display = Sfx.on ? 'none' : '';
+      const st = $('#mhSoundText');
+      if (st) st.textContent = Sfx.on ? 'Sound' : 'Muted';
       const gOn = $('#icoOn'), gOff = $('#icoOff');
       if (gOn) gOn.style.display = Sfx.on ? '' : 'none';
       if (gOff) gOff.style.display = Sfx.on ? 'none' : '';
@@ -1550,8 +1566,13 @@ function initMobileHome() {
       try { localStorage.setItem('theme', next); } catch (_) {}
       dispatchEvent(new CustomEvent('themechange', { detail: next }));
       Haptics.vibrate('selection');
+      const tt = $('#mhThemeText');
+      if (tt) tt.textContent = next === 'dark' ? 'Dark' : 'Light';
     });
   }
+
+  setLevel(level);
+  setTimeout(placePills, 80);
 }
 
 if (isNativeApp) {
