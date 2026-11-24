@@ -937,6 +937,7 @@ async function enterGame(mode, x, y) {
   await irisIn(x, y);
   savedScroll = scrollY; M.mode = mode;
   if (!pick.hidden) { closePick(true); if (pickPushed) { pickPushed = false; history.replaceState(null, ''); } }
+  const mh = $('#mobileHome'); if (mh) mh.hidden = true;
   $('#landing').style.display = 'none'; document.body.classList.add('in-game');
   $('#game').hidden = false; buildArena(mode); newGames(seed);
   if (!M.raf) { M.last = performance.now(); M.raf = requestAnimationFrame(frame); }
@@ -950,7 +951,11 @@ async function exitGame() {
   cancelAnimationFrame(M.raf); M.raf = 0; $('#game').hidden = true; $('#result').hidden = true; $('#countdown').textContent = '';
   document.body.classList.remove('in-game');
   if (isNativeApp) {
-    openPick();
+    const mh = $('#mobileHome');
+    if (mh) {
+      mh.hidden = false;
+      const b = $('#mhBestScore'); if (b) b.textContent = (Stats.d.best || 0).toLocaleString();
+    }
   } else {
     $('#landing').style.display = ''; window.scrollTo(0, savedScroll);
     renderRecord();
@@ -1506,13 +1511,56 @@ void main(){
 /* loader & startup */
 function hideLoader() { $('#loader').classList.add('done'); if (window.__heroGo) window.__heroGo(); else setTimeout(() => window.__heroGo && window.__heroGo(), 200); }
 
+function initMobileHome() {
+  const mh = $('#mobileHome');
+  if (!mh) return;
+  mh.hidden = false;
+  const b = $('#mhBestScore');
+  if (b) b.textContent = (Stats.d.best || 0).toLocaleString();
+
+  $('#mhPlaySolo').addEventListener('click', () => {
+    Haptics.vibrate('selection');
+    enterGame('solo', innerWidth / 2, innerHeight / 2);
+  });
+
+  $('#mhPlayVs').addEventListener('click', () => {
+    Haptics.vibrate('selection');
+    enterGame('vs', innerWidth / 2, innerHeight / 2);
+  });
+
+  const soundBtn = $('#mhBtnSound');
+  if (soundBtn) {
+    soundBtn.addEventListener('click', () => {
+      Sfx.on = !Sfx.on;
+      Haptics.vibrate('selection');
+      $('#mhIcoOn').style.display = Sfx.on ? '' : 'none';
+      $('#mhIcoOff').style.display = Sfx.on ? 'none' : '';
+      const gOn = $('#icoOn'), gOff = $('#icoOff');
+      if (gOn) gOn.style.display = Sfx.on ? '' : 'none';
+      if (gOff) gOff.style.display = Sfx.on ? 'none' : '';
+    });
+  }
+
+  const themeBtn = $('#mhBtnTheme');
+  if (themeBtn) {
+    themeBtn.addEventListener('click', () => {
+      const cur = document.documentElement.getAttribute('data-theme') || 'dark';
+      const next = cur === 'dark' ? 'light' : 'dark';
+      document.documentElement.setAttribute('data-theme', next);
+      try { localStorage.setItem('theme', next); } catch (_) {}
+      dispatchEvent(new CustomEvent('themechange', { detail: next }));
+      Haptics.vibrate('selection');
+    });
+  }
+}
+
 if (isNativeApp) {
   document.body.classList.add('mobile-app-mode');
   const landing = $('#landing'), nav = $('#nav');
   if (landing) landing.style.display = 'none';
   if (nav) nav.style.display = 'none';
   hideLoader();
-  openPick();
+  initMobileHome();
   setTimeout(() => AI.init(), 300);
 } else {
   initHero();
