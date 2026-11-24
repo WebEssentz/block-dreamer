@@ -1761,4 +1761,5 @@ if (isNativeApp) {
   const loaded = new Promise(r => document.readyState === 'complete' ? r() : addEventListener('load', r));
   Promise.all([loaded, sleep(900)]).then(() => { hideLoader(); setTimeout(() => AI.init(), 1200); });
 }
+window.__BD_BOOT_OK__ = true;
 })();

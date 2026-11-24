@@ -1769,7 +1769,7 @@ body.in-game .mobile-home,
     -webkit-backdrop-filter: blur(28px) saturate(190%);
     border: 1px solid rgba(var(--ink), 0.15);
     box-shadow: 0 16px 40px rgba(var(--shadow), 0.3);
-    z-index: 999;
+    z-index: 10050;
     animation: otaSlideUp 0.35s cubic-bezier(0.16, 1, 0.3, 1);
 }
 
