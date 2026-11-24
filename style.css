@@ -4593,7 +4593,7 @@ html[data-theme="light"] .pk-card.mode.vs .pk-shine::after {
     line-height: 1.15;
 }
 
-.pm-score-col.lead b {
+.pm-score-col.is-leading b {
     color: var(--hot);
 }
 

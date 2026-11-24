@@ -864,9 +864,8 @@ function renderTools() {
 function checkEnd() {
   if (M.ended) return;
   const y = M.you.game;
-  const stuck = y.over && !M.gaveUp && (toolOK('undo') || toolOK('reroll'));
-  if (stuck !== M.stuck) { M.stuck = stuck; M.you.rescue = stuck; M.you.dirty = true; renderTools(); }
-  const out = y.over && !stuck;
+  if (M.stuck) { M.stuck = false; M.you.rescue = false; M.you.dirty = true; renderTools(); }
+  const out = y.over;
   if (M.mode === 'solo') { if (out) finish('solo'); return; }
   const a = M.ai.game;
   if (a.over) {
@@ -1000,13 +999,13 @@ function renderPauseSnapshot() {
     if (M.mode === 'vs' && M.ai && M.ai.game) {
       const a = M.ai.game.score;
       scores.innerHTML =
-        `<div class="pm-score-col${y >= a ? ' lead' : ''}"><small>You</small><b>${y.toLocaleString()}</b></div>` +
+        `<div class="pm-score-col${y >= a ? ' is-leading' : ''}"><small>You</small><b>${y.toLocaleString()}</b></div>` +
         `<i class="pm-score-sep" aria-hidden="true"></i>` +
-        `<div class="pm-score-col${a > y ? ' lead' : ''}"><small>AI</small><b>${a.toLocaleString()}</b></div>`;
+        `<div class="pm-score-col${a > y ? ' is-leading' : ''}"><small>AI</small><b>${a.toLocaleString()}</b></div>`;
     } else {
       const best = Math.max(Stats.d.best || 0, y);
       scores.innerHTML =
-        `<div class="pm-score-col${y > 0 && y >= best ? ' lead' : ''}"><small>Score</small><b>${y.toLocaleString()}</b></div>` +
+        `<div class="pm-score-col${y > 0 && y >= best ? ' is-leading' : ''}"><small>Score</small><b>${y.toLocaleString()}</b></div>` +
         `<i class="pm-score-sep" aria-hidden="true"></i>` +
         `<div class="pm-score-col"><small>Best</small><b>${best.toLocaleString()}</b></div>`;
     }
