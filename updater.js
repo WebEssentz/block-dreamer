@@ -45,7 +45,7 @@ const Updater = {
     const sEl = document.getElementById('mhUpdateStatusText');
     if (sEl && statusText) sEl.textContent = statusText;
     const smV = document.getElementById('smVersionDesc');
-    if (smV) smV.textContent = `v${this.currentVersion} · 711 KB On-Device Neural Net`;
+    if (smV) smV.textContent = `v${this.currentVersion}`;
     const smBtn = document.getElementById('smBtnCheckUpdate');
     if (smBtn && btnText) {
       const span = smBtn.querySelector('span');
@@ -60,7 +60,7 @@ const Updater = {
     }
     if (this.checking) return;
     if (!navigator.onLine) {
-      this.updateUI('Offline', 'Check Now');
+      this.updateUI('Offline', 'Check for Update');
       if (manual) this.toast('Offline. Will check automatically when online.');
       window.addEventListener('online', () => {
         setTimeout(() => this.check(false), 1000);
@@ -79,19 +79,21 @@ const Updater = {
       const remote = await res.json();
 
       const localTs = this.getLocalTimestamp();
-      const hasUpdate = !!(remote.timestamp && Number(remote.timestamp) > localTs);
+      const bundledTs = (window.__BD_BUNDLED__ && Number(window.__BD_BUNDLED__.timestamp)) || 0;
+      const missingHtml = localTs > bundledTs && !localStorage.getItem('bd_live_html');
+      const hasUpdate = !!(remote.timestamp && Number(remote.timestamp) > localTs) || missingHtml;
 
       if (hasUpdate) {
-        this.updateUI('Downloading update...', 'Updating...');
+        this.updateUI('Downloading update...', 'Downloading...');
         await this.downloadUpdate(remote);
       } else {
         this.updateUI('App up to date', 'Up to Date');
         if (manual) this.toast('Block Dreamer is up to date.');
-        setTimeout(() => this.updateUI(null, 'Check Now'), 2500);
+        setTimeout(() => this.updateUI(null, 'Check for Update'), 2500);
       }
     } catch (err) {
       console.warn('OTA check failed:', err);
-      this.updateUI('Check for Updates', 'Check Now');
+      this.updateUI('Check for Updates', 'Check for Update');
       if (manual) this.toast('Could not reach GitHub.');
     } finally {
       this.checking = false;
