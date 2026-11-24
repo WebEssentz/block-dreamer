@@ -2873,7 +2873,8 @@ h2 {
     }
 
     .tools {
-        padding: 4px
+        padding: 4px;
+        margin-bottom: max(6px, env(safe-area-inset-bottom));
     }
 
     .tool,

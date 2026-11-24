@@ -247,9 +247,14 @@ async function hint(m) {
 async function handle(m) {
   if (m.type === 'init') {
     CFG = m.preset === 'fast' ? { beam: 4, topk: 4, samples: 2 } : { beam: 6, topk: 6, samples: 3 };
-    importScripts(ORT_BASE + 'ort.wasm.min.js');
-    ort.env.wasm.wasmPaths = ORT_BASE;
-    ort.env.wasm.numThreads = 1;      // no SharedArrayBuffer needed -> works on GitHub Pages
+    try {
+      importScripts('lib/ort.wasm.min.js');
+      ort.env.wasm.wasmPaths = 'lib/';
+    } catch (_) {
+      importScripts(ORT_BASE + 'ort.wasm.min.js');
+      ort.env.wasm.wasmPaths = ORT_BASE;
+    }
+    ort.env.wasm.numThreads = 1;      // no SharedArrayBuffer needed -> works on GitHub Pages & mobile WebView
     ort.env.wasm.proxy = false;       // we ARE the worker
     const [buf, meta] = await Promise.all([
       fetch('model.onnx').then(r => { if (!r.ok) throw new Error('model.onnx not found'); return r.arrayBuffer(); }),

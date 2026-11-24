@@ -16,6 +16,32 @@ const ease = t => t * t * (3 - 2 * t);
 const hz = n => 440 * Math.pow(2, (n - 69) / 12);
 
 /* =========================================================
+   HAPTICS (Capacitor Native + Web Vibrate fallback)
+========================================================= */
+const Haptics = {
+  vibrate(style) {
+    try {
+      if (window.Capacitor && window.Capacitor.Plugins && window.Capacitor.Plugins.Haptics) {
+        const H = window.Capacitor.Plugins.Haptics;
+        if (style === 'selection') H.selectionStart();
+        else if (style === 'light') H.impact({ style: 'LIGHT' });
+        else if (style === 'medium') H.impact({ style: 'MEDIUM' });
+        else if (style === 'heavy') H.impact({ style: 'HEAVY' });
+        else if (style === 'error') H.notification({ type: 'ERROR' });
+        else if (style === 'success') H.notification({ type: 'SUCCESS' });
+      } else if (navigator.vibrate) {
+        if (style === 'selection') navigator.vibrate(8);
+        else if (style === 'light') navigator.vibrate(15);
+        else if (style === 'medium') navigator.vibrate(30);
+        else if (style === 'heavy') navigator.vibrate([40, 20, 40]);
+        else if (style === 'error') navigator.vibrate([60, 40, 60]);
+        else if (style === 'success') navigator.vibrate([20, 30, 20, 30, 40]);
+      }
+    } catch (_) {}
+  }
+};
+
+/* =========================================================
    SOUND (synthesized, no files)
 ========================================================= */
 const Sfx = {
@@ -36,19 +62,20 @@ const Sfx = {
   notes(list, step, dur, vol, type, m = 1, when = 0) { list.forEach((n, i) => this.tone(hz(n), dur, vol, type, null, when + i * step, m)); },
   play(name, m = 1) {
     switch (name) {
-      case 'pick': this.tone(880, .06, .12, 'sine', 1250, 0, m); break;
-      case 'place': this.tone(220, .16, .4, 'sine', 70, 0, m); this.tone(520, .03, .08, 'square', null, 0, m); break;
-      case 'bad': this.tone(150, .2, .12, 'square', 95, 0, m); break;
-      case 'over': this.notes([67, 64, 60, 55], .22, .45, .2, 'triangle', m, .3); break;
-      case 'win': this.notes([72, 76, 79, 84, 88], .12, .5, .2, 'triangle', m); break;
-      case 'lose': this.notes([64, 60, 57, 52], .2, .5, .18, 'triangle', m); break;
-      case 'hint': this.notes([76, 83, 88], .07, .35, .07, 'sine', m); break;
-      case 'undo': this.tone(700, .14, .12, 'sine', 300, 0, m); break;
-      case 'reroll': for (let i = 0; i < 5; i++) this.tone(300 + Math.random() * 500, .04, .08, 'square', null, i * .045, m); break;
-      case 'boardclear': this.notes([60, 64, 67, 72, 76, 79, 84, 88, 91, 96], .07, .6, .16, 'triangle', m, .25); break;
+      case 'pick': Haptics.vibrate('selection'); this.tone(880, .06, .12, 'sine', 1250, 0, m); break;
+      case 'place': Haptics.vibrate('light'); this.tone(220, .16, .4, 'sine', 70, 0, m); this.tone(520, .03, .08, 'square', null, 0, m); break;
+      case 'bad': Haptics.vibrate('error'); this.tone(150, .2, .12, 'square', 95, 0, m); break;
+      case 'over': Haptics.vibrate('error'); this.notes([67, 64, 60, 55], .22, .45, .2, 'triangle', m, .3); break;
+      case 'win': Haptics.vibrate('success'); this.notes([72, 76, 79, 84, 88], .12, .5, .2, 'triangle', m); break;
+      case 'lose': Haptics.vibrate('error'); this.notes([64, 60, 57, 52], .2, .5, .18, 'triangle', m); break;
+      case 'hint': Haptics.vibrate('selection'); this.notes([76, 83, 88], .07, .35, .07, 'sine', m); break;
+      case 'undo': Haptics.vibrate('selection'); this.tone(700, .14, .12, 'sine', 300, 0, m); break;
+      case 'reroll': Haptics.vibrate('medium'); for (let i = 0; i < 5; i++) this.tone(300 + Math.random() * 500, .04, .08, 'square', null, i * .045, m); break;
+      case 'boardclear': Haptics.vibrate('heavy'); this.notes([60, 64, 67, 72, 76, 79, 84, 88, 91, 96], .07, .6, .16, 'triangle', m, .25); break;
     }
   },
   clear(lines, combo, m = 1) {
+    Haptics.vibrate(lines >= 3 || combo >= 3 ? 'heavy' : 'medium');
     const lvl = Math.min(combo, 8), base = 72 + lvl * 2;
     let ns = [0, 4, 7, 12]; if (lines >= 2) ns = ns.concat([16, 19]); if (lines >= 3) ns = ns.concat([24, 28]);
     this.tone(150, .22, .35, 'sine', 55, 0, m);

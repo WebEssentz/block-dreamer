@@ -1,14 +1,13 @@
-# ignore everything
-*
-
-# except these
-!.gitignore
-!README.md
-!index.html
-!style.css
-!engine.js
-!ai-worker.js
-!app.js
-!model.onnx
-!model.json
-!me.jpg
+node_modules/
+.build-tools/
+www/
+android/.gradle/
+android/build/
+android/app/build/
+android/.idea/
+android/*.iml
+android/app/*.iml
+android/local.properties
+*.apk
+.DS_Store
+Thumbs.db

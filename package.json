@@ -1,0 +1,21 @@
+{
+  "name": "block-dreamer",
+  "version": "1.0.0",
+  "description": "Block puzzle game with on-device neural network dreamer",
+  "scripts": {
+    "build": "node scripts/build.js",
+    "sync": "node scripts/build.js && cap sync android",
+    "open:android": "cap open android"
+  },
+  "dependencies": {
+    "@capacitor/android": "^7.0.0",
+    "@capacitor/core": "^7.0.0",
+    "@capacitor/haptics": "^7.0.0",
+    "@capacitor/screen-orientation": "^7.0.0",
+    "@capacitor/status-bar": "^7.0.0",
+    "onnxruntime-web": "^1.20.1"
+  },
+  "devDependencies": {
+    "@capacitor/cli": "^7.0.0"
+  }
+}
