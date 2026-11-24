@@ -598,10 +598,10 @@
   <!-- GAME -->
   <div id="game" hidden>
     <div class="g-top">
-      <button class="icon glass" id="btnBack" aria-label="Back to menu">
-        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4"
-          stroke-linecap="round" stroke-linejoin="round">
-          <path d="M15 6l-6 6 6 6" />
+      <button class="icon glass" id="btnPause" aria-label="Pause game">
+        <svg width="17" height="17" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+          <rect x="6" y="4.5" width="4.2" height="15" rx="2.1" />
+          <rect x="13.8" y="4.5" width="4.2" height="15" rx="2.1" />
         </svg>
       </button>
       <div class="g-title glass"><b id="modeChip">Solo</b><i></i><span id="seedChip">#000000</span></div>
@@ -632,6 +632,64 @@
           <button class="btn primary" id="watchAi" type="button">Watch AI finish</button>
           <button class="btn glass" id="endAfterElimination" type="button">End match now</button>
         </div>
+      </div>
+    </div>
+
+    <div class="pause-modal" id="pauseModal" hidden>
+      <div class="pm-backdrop" id="pmBackdrop"></div>
+      <div class="pm-card glass" role="dialog" aria-modal="true" aria-labelledby="pmTitle">
+        <span class="eyebrow pm-meta" id="pmMeta">Solo · #000000</span>
+        <h2 class="pm-title" id="pmTitle">Paused</h2>
+
+        <div class="pm-scores" id="pmScores"></div>
+
+        <button class="btn primary pm-resume" id="pmResume" type="button">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+            <path d="M7.5 5.2v13.6c0 .8.9 1.3 1.6.9l10.4-6.8c.6-.4.6-1.4 0-1.8L9.1 4.3c-.7-.4-1.6.1-1.6.9z" />
+          </svg>
+          <span>Resume</span>
+        </button>
+
+        <div class="pm-restart-row">
+          <button class="btn glass pm-restart-btn" id="pmRestartSame" type="button">
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.1" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+              <path d="M3 12a9 9 0 1 0 3-6.7L3 8" />
+              <path d="M3 3v5h5" />
+            </svg>
+            <span>Same board</span>
+          </button>
+          <button class="btn glass pm-restart-btn" id="pmRestartNew" type="button">
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.1" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+              <path d="M16 3h5v5M4 20L21 3M21 16v5h-5M15 15l6 6M4 4l5 5" />
+            </svg>
+            <span>New board</span>
+          </button>
+        </div>
+
+        <div class="pm-toggles" role="group" aria-label="Quick settings">
+          <button class="pm-pill-toggle on" id="pmToggleSound" type="button" aria-pressed="true">
+            <svg class="pm-ico-on" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+              <path d="M11 5L6 9H3v6h3l5 4V5z" />
+              <path d="M15.5 8.5a5 5 0 010 7" />
+            </svg>
+            <svg class="pm-ico-off" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="display:none" aria-hidden="true">
+              <path d="M11 5L6 9H3v6h3l5 4V5z" />
+              <path d="M22 9l-6 6M16 9l6 6" />
+            </svg>
+            <span>Sound</span>
+            <i class="pm-dot" aria-hidden="true"></i>
+          </button>
+          <button class="pm-pill-toggle on" id="pmToggleHaptics" type="button" aria-pressed="true">
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+              <rect x="7" y="4" width="10" height="16" rx="2.5" />
+              <path d="M3 9v6M21 9v6" />
+            </svg>
+            <span>Haptics</span>
+            <i class="pm-dot" aria-hidden="true"></i>
+          </button>
+        </div>
+
+        <button class="btn ghost pm-quit" id="pmQuit" type="button">Quit to Menu</button>
       </div>
     </div>
 

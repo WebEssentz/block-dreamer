@@ -93,6 +93,43 @@ const Sfx = {
   },
 };
 
+function syncSoundUI() {
+  const gOn = $('#icoOn'), gOff = $('#icoOff');
+  if (gOn) gOn.style.display = Sfx.on ? '' : 'none';
+  if (gOff) gOff.style.display = Sfx.on ? 'none' : '';
+  const pmS = $('#pmToggleSound');
+  if (pmS) {
+    pmS.classList.toggle('on', Sfx.on);
+    pmS.setAttribute('aria-pressed', String(Sfx.on));
+    const pOn = $('.pm-ico-on', pmS), pOff = $('.pm-ico-off', pmS);
+    if (pOn) pOn.style.display = Sfx.on ? '' : 'none';
+    if (pOff) pOff.style.display = Sfx.on ? 'none' : '';
+  }
+  const smS = $('#smToggleSound');
+  if (smS) {
+    smS.classList.toggle('on', Sfx.on);
+    smS.setAttribute('aria-pressed', String(Sfx.on));
+  }
+  const val = $('#mhDropSoundVal');
+  if (val) val.textContent = Sfx.on ? 'On' : 'Muted';
+  const onIco = $('#mhDropIcoSoundOn'), offIco = $('#mhDropIcoSoundOff');
+  if (onIco) onIco.style.display = Sfx.on ? '' : 'none';
+  if (offIco) offIco.style.display = Sfx.on ? 'none' : '';
+}
+
+function syncHapticsUI() {
+  const pmH = $('#pmToggleHaptics');
+  if (pmH) {
+    pmH.classList.toggle('on', Haptics.enabled);
+    pmH.setAttribute('aria-pressed', String(Haptics.enabled));
+  }
+  const smH = $('#smToggleHaptics');
+  if (smH) {
+    smH.classList.toggle('on', Haptics.enabled);
+    smH.setAttribute('aria-pressed', String(Haptics.enabled));
+  }
+}
+
 /* =========================================================
    AI CLIENT (web worker)
 ========================================================= */
@@ -335,13 +372,13 @@ class BoardView {
       if (e && cv.hasPointerCapture(e.pointerId)) cv.releasePointerCapture(e.pointerId);
       const piece = this.game.hand[d.i]; if (!piece) return;
       const pose = this.dragPose(d);
-      const spot = drop && !this.locked && !pose.home ? this.snap(d.i, pose.fr, pose.fc) : null;
+      const spot = drop && !this.locked && !M.paused && !pose.home ? this.snap(d.i, pose.fr, pose.fc) : null;
       if (spot) { const info = this.commit(d.i, spot.r, spot.c); this.onInfo && this.onInfo(this, info); return; }
-      if (drop && !pose.home && !this.locked) this.onBad && this.onBad();
+      if (drop && !pose.home && !this.locked && !M.paused) this.onBad && this.onBad();
       this.back = { i: d.i, x: pose.px, y: pose.py, s: pose.s, t: 0 };          // glide back to the tray
     };
     cv.addEventListener('pointerdown', e => {
-      if (this.drag || this.locked || !this.game || this.game.over) return;
+      if (this.drag || this.locked || M.paused || !this.game || this.game.over) return;
       this.rect = cv.getBoundingClientRect();
       const p = this.toLogical(e); if (p.y < BY + BW + 2) return;
       const i = this.pickSlot(p.x); if (i < 0) return;
@@ -514,7 +551,7 @@ class BoardView {
 /* =========================================================
    MATCH (solo / versus)
 ========================================================= */
-const M = { mode: 'solo', seed: 0, you: null, ai: null, running: false, ended: false, raf: 0, last: 0, token: 0, ctl: null, speed: 3, spectating: false, watchPrompt: false };
+const M = { mode: 'solo', seed: 0, you: null, ai: null, running: false, paused: false, pauseAt: 0, ended: false, raf: 0, last: 0, token: 0, ctl: null, speed: 3, spectating: false, watchPrompt: false };
 const LEVEL_NAMES = { easy: 'Easy', normal: 'Normal', hard: 'Hard' };
 const LEVEL_HINTS = { easy: 'Makes mistakes, and you get 3 hints.', normal: 'Plays on instinct, and you get 2 hints.', hard: 'Full dream search. No hints.' };
 let level = 'normal';
@@ -697,6 +734,9 @@ function updateSpectate() {
 }
 function newGames(seed) {
   M.seed = seed;
+  M.paused = false; M.pauseAt = 0;
+  $('#game').classList.remove('is-paused');
+  const pm = $('#pauseModal'); if (pm) { pm.classList.remove('on'); pm.hidden = true; }
   M.spectating = false; M.watchPrompt = false; $('#watchPrompt').hidden = true;
   const spec = $('#spec'); if (spec) spec.classList.remove('show');
   $('#arena').classList.remove('spectate');
@@ -764,7 +804,7 @@ const HINT_COOLDOWN = 30000;
 const hintWait = () => M.tools ? Math.max(0, M.tools.coolUntil - performance.now()) : 0;
 function toolOK(k) {
   const v = M.you, t = M.tools;
-  if (!v || !t || M.ended || v.locked || M.watchPrompt || M.spectating) return false;
+  if (!v || !t || M.ended || M.paused || v.locked || M.watchPrompt || M.spectating) return false;
   if (k === 'hint') return t.hint > 0 && !t.busy && !v.game.over && !v.hint && hintWait() <= 0;
   if (k === 'undo') return t.undo > 0 && !!v.undoSnap;
   if (k === 'reroll') return t.reroll > 0 && v.game.hand.some(Boolean);
@@ -879,23 +919,30 @@ async function finish(kind) {
 function frame(ts) {
   M.raf = requestAnimationFrame(frame);
   const dt = Math.min(.05, (ts - M.last) / 1000 || .016); M.last = ts; const t = ts / 1000;
-  for (const v of [M.you, M.ai]) if (v) { v.fx.update(dt, v.game.score); v.update(dt); v.draw(t); updateHUD(v); }
+  for (const v of [M.you, M.ai]) if (v) {
+    if (!M.paused) { v.fx.update(dt, v.game.score); v.update(dt); }
+    v.draw(t); updateHUD(v);
+  }
   if (M.lead) {
     const a = M.ai.game.score, y = M.you.game.score, lead = (y + a ? y / (y + a) : .5).toFixed(3);
     if (lead !== M.leadV) { M.leadV = lead; M.lead.style.setProperty('--lead', lead); }
   }
-  if (M.running) { checkEnd(); if (M.running) { aiStep(dt); checkEnd(); } }
+  if (M.running && !M.paused) { checkEnd(); if (M.running) { aiStep(dt); checkEnd(); } }
   renderTools();
   updateSpectate();
+}
+async function waitUnpaused(tok) {
+  while (M.paused && tok === M.token) await sleep(80);
+  return tok === M.token;
 }
 async function countdown(tok) {
   const el = $('#countdown');
   for (const s of ['3', '2', '1', 'Go']) {
-    if (tok !== M.token) return false;
+    if (!(await waitUnpaused(tok))) { el.textContent = ''; return false; }
     el.textContent = s; el.classList.remove('pop'); void el.offsetWidth; el.classList.add('pop');
     Sfx.tone(s === 'Go' ? 880 : 520, .12, .15, 'triangle'); await sleep(s === 'Go' ? 450 : 650);
   }
-  el.textContent = ''; return tok === M.token;
+  el.textContent = ''; return await waitUnpaused(tok);
 }
 async function begin() {                    // countdown, then go
   const tok = ++M.token; $('#result').hidden = true; M.ended = false; M.running = false;
@@ -939,6 +986,72 @@ async function irisOut() {
   iris.classList.add('out'); await sleep(reduce ? 60 : 650);
   iris.style.transition = 'none'; iris.classList.remove('on', 'out'); void iris.offsetWidth; iris.style.transition = '';
 }
+let gamePushed = false;
+let pauseCloseTimer = 0;
+
+function renderPauseSnapshot() {
+  const meta = $('#pmMeta'), scores = $('#pmScores');
+  if (meta) {
+    const modeTxt = M.mode === 'vs' ? `vs AI · ${LEVEL_NAMES[level]}` : 'Solo';
+    meta.textContent = `${modeTxt} · #${pad6(M.seed)}`;
+  }
+  if (scores && M.you && M.you.game) {
+    const y = M.you.game.score;
+    if (M.mode === 'vs' && M.ai && M.ai.game) {
+      const a = M.ai.game.score;
+      scores.innerHTML =
+        `<div class="pm-score-col${y >= a ? ' lead' : ''}"><small>You</small><b>${y.toLocaleString()}</b></div>` +
+        `<i class="pm-score-sep" aria-hidden="true"></i>` +
+        `<div class="pm-score-col${a > y ? ' lead' : ''}"><small>AI</small><b>${a.toLocaleString()}</b></div>`;
+    } else {
+      const best = Math.max(Stats.d.best || 0, y);
+      scores.innerHTML =
+        `<div class="pm-score-col${y > 0 && y >= best ? ' lead' : ''}"><small>Score</small><b>${y.toLocaleString()}</b></div>` +
+        `<i class="pm-score-sep" aria-hidden="true"></i>` +
+        `<div class="pm-score-col"><small>Best</small><b>${best.toLocaleString()}</b></div>`;
+    }
+  }
+}
+
+function pauseGame(silent = false) {
+  const gEl = $('#game'), pm = $('#pauseModal');
+  if (!gEl || gEl.hidden || M.paused || M.ended || M.busy || M.watchPrompt || !pm) return;
+  clearTimeout(pauseCloseTimer);
+  M.paused = true;
+  M.pauseAt = performance.now();
+  if (M.you && M.you.drag) {
+    M.you.drag = null;
+    M.you.back = null;
+    M.you.dirty = true;
+  }
+  renderPauseSnapshot();
+  syncSoundUI();
+  syncHapticsUI();
+  gEl.classList.add('is-paused');
+  pm.hidden = false;
+  void pm.offsetWidth;
+  pm.classList.add('on');
+  if (!silent) Haptics.vibrate('selection');
+  const resBtn = $('#pmResume');
+  if (resBtn) resBtn.focus();
+}
+
+function resumeGame() {
+  if (!M.paused) return;
+  const gEl = $('#game'), pm = $('#pauseModal');
+  const elapsed = performance.now() - M.pauseAt;
+  if (M.tools && M.tools.coolUntil > M.pauseAt) M.tools.coolUntil += elapsed;
+  M.paused = false;
+  M.last = performance.now();
+  if (gEl) gEl.classList.remove('is-paused');
+  if (pm) {
+    pm.classList.remove('on');
+    clearTimeout(pauseCloseTimer);
+    pauseCloseTimer = setTimeout(() => { if (!M.paused) pm.hidden = true; }, 260);
+  }
+  Haptics.vibrate('selection');
+}
+
 async function enterGame(mode, x, y) {
   if (M.busy) return; M.busy = true; Sfx.ensure();
   if (mode === 'vs') AI.init();
@@ -953,11 +1066,16 @@ async function enterGame(mode, x, y) {
   }
   $('#landing').style.display = 'none'; document.body.classList.add('in-game');
   $('#game').hidden = false; buildArena(mode); newGames(seed);
+  if (!history.state || !history.state.game) { history.pushState({ game: 1 }, ''); gamePushed = true; }
   if (!M.raf) { M.last = performance.now(); M.raf = requestAnimationFrame(frame); }
   await sleep(80); await irisOut(); M.busy = false; begin();
 }
 async function exitGame() {
-  if (M.busy) return; M.busy = true; M.token++; M.running = false;
+  if (M.busy) return; M.busy = true; M.token++; M.running = false; M.paused = false;
+  clearTimeout(pauseCloseTimer);
+  $('#game').classList.remove('is-paused');
+  const pm = $('#pauseModal'); if (pm) { pm.classList.remove('on'); pm.hidden = true; }
+  if (gamePushed) { gamePushed = false; if (history.state && history.state.game) history.replaceState(null, ''); }
   M.watchPrompt = false; M.spectating = false; $('#watchPrompt').hidden = true;
   const spec = $('#spec'); if (spec) spec.remove(); $('#arena').classList.remove('spectate');
   await irisIn(innerWidth / 2, innerHeight / 2);
@@ -1015,7 +1133,27 @@ function closePick(instant) {
 }
 // leave through history so the phone's back button and Esc behave the same way
 function dismissPick() { if (isNativeApp) return; if (pickPushed) { pickPushed = false; history.back(); } else closePick(); }
-addEventListener('popstate', () => { pickPushed = false; if (!pick.hidden) closePick(); });
+addEventListener('popstate', () => {
+  pickPushed = false;
+  if (!pick.hidden) { closePick(); return; }
+  const gEl = $('#game');
+  if (gEl && !gEl.hidden) {
+    const share = $('#share');
+    if (share && !share.hidden) {
+      share._close();
+      history.pushState({ game: 1 }, '');
+      gamePushed = true;
+      return;
+    }
+    if (!M.ended && !M.watchPrompt) {
+      if (M.paused) resumeGame(); else pauseGame();
+      history.pushState({ game: 1 }, '');
+      gamePushed = true;
+      return;
+    }
+    if (M.ended) { gamePushed = false; exitGame(); }
+  }
+});
 $('.pk-x', pick).addEventListener('click', dismissPick);
 if (!coarse && !reduce) $$('.pk-card', pick).forEach(c => {
   c.addEventListener('pointermove', e => {
@@ -1031,7 +1169,29 @@ $$('a[href="#play"]').forEach(a => a.addEventListener('click', e => {
   if (QSEED !== null) return;                       // a challenge link goes straight into its match
   e.preventDefault(); openPick();
 }));
-$('#btnBack').addEventListener('click', exitGame);
+$('#btnPause').addEventListener('click', () => pauseGame());
+$('#pmBackdrop').addEventListener('click', resumeGame);
+$('#pmResume').addEventListener('click', resumeGame);
+$('#pmRestartSame').addEventListener('click', () => { Haptics.vibrate('selection'); rematch(M.seed); });
+$('#pmRestartNew').addEventListener('click', () => { Haptics.vibrate('selection'); rematch(randomSeed()); });
+$('#pmQuit').addEventListener('click', () => { Haptics.vibrate('selection'); exitGame(); });
+$('#pmToggleSound').addEventListener('click', () => {
+  Sfx.ensure();
+  Sfx.on = !Sfx.on;
+  syncSoundUI();
+  Haptics.vibrate('selection');
+});
+$('#pmToggleHaptics').addEventListener('click', () => {
+  Haptics.enabled = !Haptics.enabled;
+  try { localStorage.setItem('bp_haptics', Haptics.enabled ? '1' : '0'); } catch (_) {}
+  syncHapticsUI();
+  if (Haptics.enabled) Haptics.vibrate('light');
+});
+document.addEventListener('visibilitychange', () => {
+  if (document.hidden && !$('#game').hidden && !M.ended && !M.paused && !M.watchPrompt && M.running) {
+    pauseGame(true);
+  }
+});
 $('#rMenu').addEventListener('click', exitGame);
 $('#rRematch').addEventListener('click', () => rematch(M.seed));
 $('#rNew').addEventListener('click', () => rematch(randomSeed()));
@@ -1299,10 +1459,10 @@ function openShare() {
 }
 $('#rShare').addEventListener('click', openShare);
 $('#btnSound').addEventListener('click', () => {
-  Sfx.ensure(); Sfx.on = !Sfx.on; $('#icoOn').style.display = Sfx.on ? '' : 'none'; $('#icoOff').style.display = Sfx.on ? 'none' : '';
+  Sfx.ensure(); Sfx.on = !Sfx.on; syncSoundUI(); Haptics.vibrate('selection');
 });
 addEventListener('keydown', e => {
-  if (!$('#game').hidden && !e.metaKey && !e.altKey && !e.target.closest('input,textarea')) {
+  if (!$('#game').hidden && !M.paused && !e.metaKey && !e.altKey && !e.target.closest('input,textarea')) {
     const k = e.key.toLowerCase(), t = k === 'h' ? 'hint' : k === 'z' ? 'undo' : k === 'r' ? 'reroll' : null;
     if (t && (!e.ctrlKey || t === 'undo')) { e.preventDefault(); useTool(t); return; }
   }
@@ -1319,6 +1479,9 @@ addEventListener('keydown', e => {
   if (share && !share.hidden) {
     e.preventDefault();
     share._close();
+  } else if (!$('#game').hidden && !M.ended && !M.watchPrompt) {
+    e.preventDefault();
+    if (M.paused) resumeGame(); else pauseGame();
   } else if (!$('#game').hidden) exitGame();
 });
 
@@ -1611,24 +1774,13 @@ function initMobileHome() {
 
   // Sound toggle in dropdown
   const dropSound = $('#mhDropSound');
-  const updateSoundUI = () => {
-    const val = $('#mhDropSoundVal');
-    if (val) val.textContent = Sfx.on ? 'On' : 'Muted';
-    const onIco = $('#mhDropIcoSoundOn');
-    const offIco = $('#mhDropIcoSoundOff');
-    if (onIco) onIco.style.display = Sfx.on ? '' : 'none';
-    if (offIco) offIco.style.display = Sfx.on ? 'none' : '';
-  };
-  updateSoundUI();
+  syncSoundUI();
 
   if (dropSound) {
     dropSound.addEventListener('click', () => {
       Sfx.on = !Sfx.on;
       Haptics.vibrate('selection');
-      updateSoundUI();
-      const gOn = $('#icoOn'), gOff = $('#icoOff');
-      if (gOn) gOn.style.display = Sfx.on ? '' : 'none';
-      if (gOff) gOff.style.display = Sfx.on ? 'none' : '';
+      syncSoundUI();
     });
   }
 
@@ -1645,16 +1797,8 @@ function initMobileHome() {
     settingsModal.classList.add('on');
 
     // Sync state
-    const togH = $('#smToggleHaptics');
-    if (togH) {
-      togH.classList.toggle('on', Haptics.enabled);
-      togH.setAttribute('aria-pressed', String(Haptics.enabled));
-    }
-    const togS = $('#smToggleSound');
-    if (togS) {
-      togS.classList.toggle('on', Sfx.on);
-      togS.setAttribute('aria-pressed', String(Sfx.on));
-    }
+    syncHapticsUI();
+    syncSoundUI();
     const curTheme = document.documentElement.getAttribute('data-theme') || 'dark';
     $$('.sm-theme-lvl button').forEach(b => {
       b.classList.toggle('on', b.getAttribute('data-set-theme') === curTheme);
@@ -1688,8 +1832,7 @@ function initMobileHome() {
     smToggleHaptics.addEventListener('click', () => {
       Haptics.enabled = !Haptics.enabled;
       try { localStorage.setItem('bp_haptics', Haptics.enabled ? '1' : '0'); } catch (_) {}
-      smToggleHaptics.classList.toggle('on', Haptics.enabled);
-      smToggleHaptics.setAttribute('aria-pressed', String(Haptics.enabled));
+      syncHapticsUI();
       if (Haptics.enabled) Haptics.vibrate('light');
     });
   }
@@ -1699,12 +1842,7 @@ function initMobileHome() {
   if (smToggleSound) {
     smToggleSound.addEventListener('click', () => {
       Sfx.on = !Sfx.on;
-      smToggleSound.classList.toggle('on', Sfx.on);
-      smToggleSound.setAttribute('aria-pressed', String(Sfx.on));
-      updateSoundUI();
-      const gOn = $('#icoOn'), gOff = $('#icoOff');
-      if (gOn) gOn.style.display = Sfx.on ? '' : 'none';
-      if (gOff) gOff.style.display = Sfx.on ? 'none' : '';
+      syncSoundUI();
       Haptics.vibrate('selection');
     });
   }
