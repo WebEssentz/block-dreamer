@@ -38,6 +38,8 @@ const Updater = {
     if (vEl) vEl.textContent = `v${this.currentVersion}`;
     const sEl = document.getElementById('mhUpdateStatusText');
     if (sEl && statusText) sEl.textContent = statusText;
+    const smV = document.getElementById('smVersionDesc');
+    if (smV) smV.textContent = `v${this.currentVersion} · 711 KB On-Device Neural Net`;
   },
 
   async check(manual = false) {

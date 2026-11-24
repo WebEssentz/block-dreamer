@@ -20,7 +20,11 @@ const hz = n => 440 * Math.pow(2, (n - 69) / 12);
    HAPTICS (Capacitor Native + Web Vibrate fallback)
 ========================================================= */
 const Haptics = {
+  enabled: (() => {
+    try { return localStorage.getItem('bp_haptics') !== '0'; } catch (_) { return true; }
+  })(),
   vibrate(style) {
+    if (!this.enabled) return;
     try {
       if (window.Capacitor && window.Capacitor.Plugins && window.Capacitor.Plugins.Haptics) {
         const H = window.Capacitor.Plugins.Haptics;
@@ -897,10 +901,12 @@ async function begin() {                    // countdown, then go
   const tok = ++M.token; $('#result').hidden = true; M.ended = false; M.running = false;
   if (M.mode === 'vs') {
     const note = $('#gNote');
-    if (!AI.ready) { note.textContent = 'Waking the AI…'; note.classList.add('show'); }
-    const ok = await AI.whenReady(); note.classList.remove('show');
+    if (note) { note.textContent = ''; note.classList.remove('show'); }
+    if (!AI.ready && M.ai && M.ai.status) M.ai.status.textContent = 'Waking AI…';
+    const ok = await AI.whenReady();
+    if (note) note.classList.remove('show');
     if (tok !== M.token) return;
-    if (!ok) { const err = AI.err || 'unknown'; toast('AI failed to load: ' + err); alert('AI failed to load: ' + err); await sleep(1500); if (tok === M.token) exitGame(); return; }
+    if (!ok) { const err = AI.err || 'unknown'; toast('AI initialization failed: ' + err); await sleep(1500); if (tok === M.token) exitGame(); return; }
     AI.reset(M.seed, level);
   }
   if (!(await countdown(tok))) return;
@@ -1053,7 +1059,10 @@ const escapeHTML = value => String(value).replace(/[&<>"']/g, char => ({
 
 function shareData() {
   const vs = M.mode === 'vs', y = M.you.game.score, a = vs ? M.ai.game.score : null;
-  const url = `${location.origin}${location.pathname}?seed=${M.seed}&s=${y}` + (vs ? `&a=${a}` : '');
+  const isLocal = location.origin.includes('localhost') || location.origin.includes('127.0.0.1') || location.protocol === 'capacitor:';
+  const base = isLocal ? 'https://webessentz.github.io/block-dreamer/' : `${location.origin}${location.pathname}`;
+  const cleanBase = base.endsWith('/') ? base : base + '/';
+  const url = `${cleanBase}?seed=${M.seed}&s=${y}` + (vs ? `&a=${a}` : '');
   const text = vs
     ? `I scored ${y.toLocaleString()} against the AI on board #${pad6(M.seed)}. The AI got ${a.toLocaleString()}. Can you beat us both?`
     : `I scored ${y.toLocaleString()} on board #${pad6(M.seed)}. Can you beat it?`;
@@ -1298,6 +1307,13 @@ addEventListener('keydown', e => {
     if (t && (!e.ctrlKey || t === 'undo')) { e.preventDefault(); useTool(t); return; }
   }
   if (e.key !== 'Escape') return;
+  const sm = $('#settingsModal');
+  if (sm && !sm.hidden) {
+    e.preventDefault();
+    sm.classList.remove('on');
+    setTimeout(() => { sm.hidden = true; }, 300);
+    return;
+  }
   if (!pick.hidden) { e.preventDefault(); dismissPick(); return; }
   const share = $('#share');
   if (share && !share.hidden) {
@@ -1613,6 +1629,106 @@ function initMobileHome() {
       const gOn = $('#icoOn'), gOff = $('#icoOff');
       if (gOn) gOn.style.display = Sfx.on ? '' : 'none';
       if (gOff) gOff.style.display = Sfx.on ? 'none' : '';
+    });
+  }
+
+  // Settings modal open / close
+  const dropSettings = $('#mhDropSettings');
+  const settingsModal = $('#settingsModal');
+  const smClose = $('#smClose');
+  const smBackdrop = $('#smBackdrop');
+
+  const openSettings = () => {
+    if (!settingsModal) return;
+    settingsModal.hidden = false;
+    settingsModal.offsetHeight; // force reflow
+    settingsModal.classList.add('on');
+
+    // Sync state
+    const togH = $('#smToggleHaptics');
+    if (togH) {
+      togH.classList.toggle('on', Haptics.enabled);
+      togH.setAttribute('aria-pressed', String(Haptics.enabled));
+    }
+    const togS = $('#smToggleSound');
+    if (togS) {
+      togS.classList.toggle('on', Sfx.on);
+      togS.setAttribute('aria-pressed', String(Sfx.on));
+    }
+    const curTheme = document.documentElement.getAttribute('data-theme') || 'dark';
+    $$('.sm-theme-lvl button').forEach(b => {
+      b.classList.toggle('on', b.getAttribute('data-set-theme') === curTheme);
+    });
+    Haptics.vibrate('selection');
+  };
+
+  const closeSettings = () => {
+    if (!settingsModal) return;
+    settingsModal.classList.remove('on');
+    setTimeout(() => {
+      settingsModal.hidden = true;
+    }, 300);
+  };
+
+  if (dropSettings) {
+    dropSettings.addEventListener('click', () => {
+      if (dropdown) dropdown.hidden = true;
+      if (menuWrap) menuWrap.classList.remove('open');
+      if (menuBtn) menuBtn.setAttribute('aria-expanded', 'false');
+      openSettings();
+    });
+  }
+
+  if (smClose) smClose.addEventListener('click', closeSettings);
+  if (smBackdrop) smBackdrop.addEventListener('click', closeSettings);
+
+  // Settings haptics toggle
+  const smToggleHaptics = $('#smToggleHaptics');
+  if (smToggleHaptics) {
+    smToggleHaptics.addEventListener('click', () => {
+      Haptics.enabled = !Haptics.enabled;
+      try { localStorage.setItem('bp_haptics', Haptics.enabled ? '1' : '0'); } catch (_) {}
+      smToggleHaptics.classList.toggle('on', Haptics.enabled);
+      smToggleHaptics.setAttribute('aria-pressed', String(Haptics.enabled));
+      if (Haptics.enabled) Haptics.vibrate('light');
+    });
+  }
+
+  // Settings sound toggle
+  const smToggleSound = $('#smToggleSound');
+  if (smToggleSound) {
+    smToggleSound.addEventListener('click', () => {
+      Sfx.on = !Sfx.on;
+      smToggleSound.classList.toggle('on', Sfx.on);
+      smToggleSound.setAttribute('aria-pressed', String(Sfx.on));
+      updateSoundUI();
+      const gOn = $('#icoOn'), gOff = $('#icoOff');
+      if (gOn) gOn.style.display = Sfx.on ? '' : 'none';
+      if (gOff) gOff.style.display = Sfx.on ? 'none' : '';
+      Haptics.vibrate('selection');
+    });
+  }
+
+  // Settings theme buttons
+  $$('.sm-theme-lvl button').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const next = btn.getAttribute('data-set-theme');
+      if (!next) return;
+      document.documentElement.setAttribute('data-theme', next);
+      try { localStorage.setItem('theme', next); } catch (_) {}
+      dispatchEvent(new CustomEvent('themechange', { detail: next }));
+      $$('.sm-theme-lvl button').forEach(b => b.classList.toggle('on', b === btn));
+      updateThemeUI(next);
+      Haptics.vibrate('selection');
+    });
+  });
+
+  // Settings modal OTA check
+  const smBtnCheckUpdate = $('#smBtnCheckUpdate');
+  if (smBtnCheckUpdate) {
+    smBtnCheckUpdate.addEventListener('click', () => {
+      Haptics.vibrate('selection');
+      if (window.Updater) window.Updater.check(true);
     });
   }
 

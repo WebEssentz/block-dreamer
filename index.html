@@ -319,6 +319,16 @@
               </div>
               <span class="mh-item-val" id="mhDropSoundVal">On</span>
             </button>
+            <button class="mh-drop-item" id="mhDropSettings" type="button">
+              <div class="mh-item-left">
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                  <circle cx="12" cy="12" r="3"/>
+                  <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"/>
+                </svg>
+                <span>Settings &amp; About</span>
+              </div>
+              <span class="mh-item-val">›</span>
+            </button>
             <div class="mh-drop-divider"></div>
             <div class="mh-drop-item ver-row">
               <div class="mh-item-left">
@@ -417,6 +427,126 @@
 
       <div class="mh-footer-tag">
         <span>BLOCK DREAMER</span>
+      </div>
+    </div>
+  </div>
+
+  <!-- SETTINGS & ABOUT MODAL -->
+  <div class="settings-modal" id="settingsModal" hidden>
+    <div class="sm-backdrop" id="smBackdrop"></div>
+    <div class="sm-sheet glass" role="dialog" aria-modal="true" aria-labelledby="smTitle">
+      <header class="sm-head">
+        <div class="sm-title-wrap">
+          <h2 class="sm-title" id="smTitle">Settings &amp; About</h2>
+          <span class="sm-subtitle">Block Dreamer · Offline Mobile</span>
+        </div>
+        <button class="icon glass sm-close" id="smClose" type="button" aria-label="Close">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M18 6L6 18M6 6l12 12"/>
+          </svg>
+        </button>
+      </header>
+
+      <div class="sm-body">
+        <!-- Developer Profile Card (Full Real Color) -->
+        <section class="sm-profile-card glass">
+          <div class="sm-profile-main">
+            <div class="sm-avatar-frame">
+              <img src="me.jpg" alt="Godwin Onyerikam" class="sm-avatar" />
+            </div>
+            <div class="sm-profile-info">
+              <h3 class="sm-name">Godwin Onyerikam</h3>
+              <span class="sm-role">Solo Creator &amp; AI Engineer</span>
+              <p class="sm-bio">Built, trained and shipped solo. An on-device 711 KB neural network RL dreamer running 100% offline with zero servers.</p>
+            </div>
+          </div>
+
+          <!-- Social Links -->
+          <div class="sm-socials">
+            <a class="sm-social-btn glass" href="https://github.com/WebEssentz/" target="_blank" rel="noopener noreferrer">
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor">
+                <path fill-rule="evenodd" clip-rule="evenodd" d="M12 2C6.477 2 2 6.484 2 12.017c0 4.425 2.865 8.18 6.839 9.504.5.092.682-.217.682-.483 0-.237-.008-.868-.013-1.703-2.782.605-3.369-1.343-3.369-1.343-.454-1.158-1.11-1.466-1.11-1.466-.908-.62.069-.608.069-.608 1.003.07 1.53 1.032 1.53 1.032.892 1.53 2.341 1.088 2.91.832.092-.647.35-1.088.636-1.338-2.22-.253-4.555-1.113-4.555-4.951 0-1.093.39-1.988 1.029-2.688-.103-.253-.446-1.272.098-2.65 0 0 .84-.27 2.75 1.026A9.564 9.564 0 0112 6.844c.85.004 1.705.115 2.504.337 1.909-1.296 2.747-1.027 2.747-1.027.546 1.379.202 2.398.1 2.651.64.7 1.028 1.595 1.028 2.688 0 3.848-2.339 4.695-4.566 4.943.359.309.678.92.678 1.855 0 1.338-.012 2.419-.012 2.747 0 .268.18.58.688.482A10.019 10.019 0 0022 12.017C22 6.484 17.522 2 12 2z"/>
+              </svg>
+              <span>GitHub</span>
+            </a>
+            <a class="sm-social-btn glass" href="https://www.snapchat.com/add/webesstenz" target="_blank" rel="noopener noreferrer">
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor">
+                <path d="M12.01 2.05c-3.77 0-6.22 2.74-6.22 5.95 0 .82.16 1.83.47 2.61.12.31.06.49-.15.65-.48.37-1.17.65-1.78.85-.35.12-.52.26-.52.54 0 .34.34.6.87.68.79.12 1.48.06 2.1-.28.32-.17.54-.08.67.24.47 1.13 1.25 1.99 2.51 2.45.36.13.52.29.47.67-.09.68-.45 1.15-1.12 1.47-.36.17-.58.33-.58.6 0 .42.49.68 1.22.78.78.11 1.54.02 2.21-.36.27-.16.48-.1.64.12.55.77 1.39 1.18 2.44 1.18 1.05 0 1.89-.41 2.44-1.18.16-.22.37-.28.64-.12.67.38 1.43.47 2.21.36.73-.1 1.22-.36 1.22-.78 0-.27-.22-.43-.58-.6-.67-.32-1.03-.79-1.12-1.47-.05-.38.11-.54.47-.67 1.26-.46 2.04-1.32 2.51-2.45.13-.32.35-.41.67-.24.62.34 1.31.4 2.1.28.53-.08.87-.34.87-.68 0-.28-.17-.42-.52-.54-.61-.2-1.3-.48-1.78-.85-.21-.16-.27-.34-.15-.65.31-.78.47-1.79.47-2.61 0-3.21-2.45-5.95-6.22-5.95z"/>
+              </svg>
+              <span>Snapchat</span>
+            </a>
+          </div>
+        </section>
+
+        <!-- Preferences Section -->
+        <section class="sm-section">
+          <span class="sm-section-label">PREFERENCES</span>
+          <div class="sm-card glass">
+            <!-- Haptics Toggle -->
+            <div class="sm-row">
+              <div class="sm-row-info">
+                <span class="sm-row-title">Haptic Feedback</span>
+                <span class="sm-row-desc">Tactile vibration on block snaps and clears</span>
+              </div>
+              <button class="sm-toggle on" id="smToggleHaptics" type="button" aria-pressed="true">
+                <span class="sm-toggle-knob"></span>
+              </button>
+            </div>
+
+            <div class="sm-row-divider"></div>
+
+            <!-- Sound Effects Toggle -->
+            <div class="sm-row">
+              <div class="sm-row-info">
+                <span class="sm-row-title">Sound Effects</span>
+                <span class="sm-row-desc">Synthesized audio tones for moves and combos</span>
+              </div>
+              <button class="sm-toggle on" id="smToggleSound" type="button" aria-pressed="true">
+                <span class="sm-toggle-knob"></span>
+              </button>
+            </div>
+
+            <div class="sm-row-divider"></div>
+
+            <!-- Theme Selector -->
+            <div class="sm-row vertical">
+              <div class="sm-row-info">
+                <span class="sm-row-title">Appearance</span>
+                <span class="sm-row-desc">Select visual color theme</span>
+              </div>
+              <div class="lvl sm-theme-lvl" role="group" aria-label="Theme mode">
+                <button type="button" data-set-theme="dark" class="on">Dark</button>
+                <button type="button" data-set-theme="light">Light</button>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        <!-- Build & Updates Section -->
+        <section class="sm-section">
+          <span class="sm-section-label">APP &amp; UPDATES</span>
+          <div class="sm-card glass">
+            <div class="sm-row">
+              <div class="sm-row-info">
+                <span class="sm-row-title">Version</span>
+                <span class="sm-row-desc" id="smVersionDesc">v1.0.1 · 711 KB On-Device Neural Net</span>
+              </div>
+              <span class="sm-status-chip">Latest</span>
+            </div>
+
+            <div class="sm-row-divider"></div>
+
+            <div class="sm-row">
+              <div class="sm-row-info">
+                <span class="sm-row-title">Live OTA Updates</span>
+                <span class="sm-row-desc">Sync new code automatically without APK downloads</span>
+              </div>
+              <button class="sm-action-btn" id="smBtnCheckUpdate" type="button">
+                <span>Check Now</span>
+              </button>
+            </div>
+          </div>
+        </section>
       </div>
     </div>
   </div>
