@@ -553,7 +553,7 @@ class BoardView {
 ========================================================= */
 const M = { mode: 'solo', seed: 0, you: null, ai: null, running: false, paused: false, pauseAt: 0, ended: false, raf: 0, last: 0, token: 0, ctl: null, speed: 3, spectating: false, watchPrompt: false };
 const LEVEL_NAMES = { easy: 'Easy', normal: 'Normal', hard: 'Hard' };
-const LEVEL_HINTS = { easy: 'Makes mistakes, and you get 3 hints.', normal: 'Plays on instinct, and you get 2 hints.', hard: 'Full dream search. No hints.' };
+const LEVEL_HINTS = { easy: 'Makes mistakes · 3 hints', normal: 'Plays on instinct · 2 hints', hard: 'Full dream search · No hints' };
 let level = 'normal';
 try { const v = localStorage.getItem('bp_level'); if (LEVEL_NAMES[v]) level = v; } catch (e) { /* storage blocked: keep default */ }
 function setLevel(v) {
