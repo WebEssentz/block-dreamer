@@ -83,12 +83,14 @@ def main():
     logo_light = render_splash_logo(512, dark_mode=False)
     logo_dark = render_splash_logo(512, dark_mode=True)
 
-    # Save to drawable and drawable-night
-    os.makedirs(os.path.join(base_res, 'drawable'), exist_ok=True)
-    os.makedirs(os.path.join(base_res, 'drawable-night'), exist_ok=True)
+    # Save to drawable, drawable-night, and xxhdpi folders
+    for d in ['drawable', 'drawable-xxhdpi']:
+        os.makedirs(os.path.join(base_res, d), exist_ok=True)
+        logo_light.save(os.path.join(base_res, d, 'splash_logo.png'), format='PNG')
 
-    logo_light.save(os.path.join(base_res, 'drawable', 'splash_logo.png'), format='PNG')
-    logo_dark.save(os.path.join(base_res, 'drawable-night', 'splash_logo.png'), format='PNG')
+    for d in ['drawable-night', 'drawable-night-xxhdpi']:
+        os.makedirs(os.path.join(base_res, d), exist_ok=True)
+        logo_dark.save(os.path.join(base_res, d, 'splash_logo.png'), format='PNG')
     print("Saved splash_logo.png for light and dark modes!")
 
 if __name__ == '__main__':
