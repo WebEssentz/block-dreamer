@@ -3379,6 +3379,8 @@ body.in-game .mobile-home,
     border-radius: 999px;
     font-size: 13px;
     font-weight: 600;
+    white-space: nowrap;
+    flex-shrink: 0;
     color: var(--mut);
     transition: color .25s, background .25s
 }
@@ -3422,8 +3424,14 @@ body.in-game .mobile-home,
     }
 
     .tools {
+        max-width: 100%;
         padding: 4px;
         margin-bottom: max(6px, env(safe-area-inset-bottom));
+    }
+
+    .tools.stuck .t-hint,
+    .tools.stuck .t-sep {
+        display: none;
     }
 
     .tool,

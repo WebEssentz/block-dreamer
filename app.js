@@ -543,7 +543,7 @@ class BoardView {
       ctx.fillStyle = `rgba(${T.bg},.7)`; rr(ctx, 0, 0, CW, this.H, 0); ctx.fill();
       ctx.textAlign = 'center'; ctx.textBaseline = 'middle'; ctx.fillStyle = T.fg;
       ctx.font = '800 38px Inter,system-ui,sans-serif'; ctx.fillText('No moves left', CW / 2, BY + BW / 2 - 10);
-      ctx.fillStyle = `rgba(${T.ink},.6)`; ctx.font = '600 18px Inter,system-ui,sans-serif'; ctx.fillText(this.rescue ? 'Undo or reroll to keep going' : g.score.toLocaleString() + ' pts', CW / 2, BY + BW / 2 + 28);
+      ctx.fillStyle = `rgba(${T.ink},.6)`; ctx.font = '600 18px Inter,system-ui,sans-serif'; ctx.fillText(this.rescue ? (typeof this.rescue === 'string' ? this.rescue : 'Reshuffle to keep going') : g.score.toLocaleString() + ' pts', CW / 2, BY + BW / 2 + 28);
     }
   }
 }
@@ -745,7 +745,7 @@ function newGames(seed) {
   M.speed = 3; $$('#spec .sp-speed button').forEach(b => b.classList.toggle('on', b.dataset.s === '3'));
   M.ctl = { phase: 'think', pending: false, hold: 0, wait: 0, res: null, mv: null };
   M.tools = { ...TOOL_LIMITS, hint: M.mode === 'vs' ? HINTS_VS[level] : TOOL_LIMITS.hint, busy: false, coolUntil: 0 };
-  M.hintMax = M.tools.hint; M.stuck = false; M.gaveUp = false; M.you.rescue = false;
+  M.hintMax = M.tools.hint; M.stuck = false; M.gaveUp = false; M.you.rescue = '';
   $('#seedChip').textContent = '#' + pad6(seed) + (M.mode === 'vs' && QSCORE !== null && seed === QSEED ? ' · beat ' + QSCORE.toLocaleString() : '');
   $('#modeChip').textContent = M.mode === 'vs' ? 'vs AI · ' + LEVEL_NAMES[level] : 'Solo';
 }
@@ -864,8 +864,14 @@ function renderTools() {
 function checkEnd() {
   if (M.ended) return;
   const y = M.you.game;
-  if (M.stuck) { M.stuck = false; M.you.rescue = false; M.you.dirty = true; renderTools(); }
-  const out = y.over;
+  const stuck = y.over && !M.gaveUp && toolOK('reroll');
+  if (stuck !== M.stuck) {
+    M.stuck = stuck;
+    M.you.rescue = stuck ? (toolOK('undo') ? 'Reshuffle or undo to keep going' : 'Reshuffle to keep going') : '';
+    M.you.dirty = true;
+    renderTools();
+  }
+  const out = y.over && !stuck;
   if (M.mode === 'solo') { if (out) finish('solo'); return; }
   const a = M.ai.game;
   if (a.over) {

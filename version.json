@@ -1,7 +1,7 @@
 {
-  "version": "1.0.5",
-  "commit": "6086ea8",
-  "timestamp": 1795561420506,
+  "version": "1.0.6",
+  "commit": "68c4ae5",
+  "timestamp": 1795623729203,
   "releaseUrl": "https://github.com/WebEssentz/block-dreamer/releases/tag/latest-apk",
   "apkUrl": "https://github.com/WebEssentz/block-dreamer/releases/download/latest-apk/app-debug.apk"
 }
